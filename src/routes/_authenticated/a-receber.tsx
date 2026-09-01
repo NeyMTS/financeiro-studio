@@ -1,277 +1,494 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  CalendarDays,
-  Check,
-  Clock3,
+  Cake,
+  MessageCircle,
+  Pencil,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { AppShell, EmptyState } from "@/components/AppShell";
 
-export const Route = createFileRoute("/_authenticated/a-receber")({
-  component: AReceberPage,
+export const Route = createFileRoute("/_authenticated/clientes")({
+  component: ClientesPage,
 });
 
-type Receivable = {
+type Client = {
   id: string;
-  source: "transaction" | "appointment";
-  client: string;
-  service: string;
-  amount: number;
-  date: string;
+  name: string;
+  phone: string | null;
+  birth_date: string | null;
+  created_at: string;
 };
 
-function formatShortDate(iso: string) {
-  const parsed = new Date(`${iso}T12:00:00`);
-
-  return parsed.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
-
-function AReceberPage() {
+function ClientesPage() {
   const { data: household } = useHousehold();
   const queryClient = useQueryClient();
 
-  const { data: receivables = [], isLoading } = useQuery({
-    queryKey: ["studio-receivables", household?.id],
+  const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingClient, setEditingClient] =
+    useState<Client | null>(null);
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const { data: clients = [], isLoading } = useQuery({
+    queryKey: ["studio-clients", household?.id],
     enabled: Boolean(household?.id),
-    queryFn: async (): Promise<Receivable[]> => {
-      const [pendingResult, appointmentsResult] = await Promise.all([
-        supabase
-          .from("transactions")
-          .select("id, description, amount, date, category")
-          .eq("household_id", household!.id)
-          .eq("type", "income")
-          .eq("status", "pending")
-          .order("date", { ascending: true }),
-        supabase
-          .from("studio_appointments")
-          .select(
-            "id, service_name, total_amount, received_amount, scheduled_date, status, studio_clients(name)"
-          )
-          .eq("household_id", household!.id)
-          .neq("status", "cancelado")
-          .order("scheduled_date", { ascending: true }),
-      ]);
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("studio_clients")
+        .select("id, name, phone, birth_date, created_at")
+        .eq("household_id", household!.id)
+        .order("name", { ascending: true });
 
-      if (pendingResult.error) throw pendingResult.error;
-      if (appointmentsResult.error) throw appointmentsResult.error;
+      if (error) throw error;
 
-      const fromTransactions: Receivable[] = (pendingResult.data ?? []).map(
-        (item) => ({
-          id: item.id,
-          source: "transaction",
-          client: item.description,
-          service: item.category ?? "Lançamento pendente",
-          amount: Number(item.amount),
-          date: item.date ? formatShortDate(item.date) : "",
-        })
-      );
-
-      const fromAppointments: Receivable[] = (appointmentsResult.data ?? [])
-        .map((item) => {
-          const relation = item.studio_clients as
-            | { name: string }
-            | { name: string }[]
-            | null;
-
-          const client = Array.isArray(relation) ? relation[0] : relation;
-
-          return {
-            id: item.id,
-            source: "appointment" as const,
-            client: client?.name ?? "Cliente",
-            service: item.service_name,
-            amount:
-              Number(item.total_amount) - Number(item.received_amount),
-            date: formatShortDate(item.scheduled_date),
-          };
-        })
-        .filter((item) => item.amount > 0.009);
-
-      return [...fromAppointments, ...fromTransactions];
+      return (data ?? []) as Client[];
     },
   });
 
-  const total = receivables.reduce((sum, item) => sum + item.amount, 0);
+  const filteredClients = clients.filter((client) =>
+    client.name.toLowerCase().includes(search.toLowerCase())
+  );
 
-  async function markReceived(item: Receivable) {
-    if (!household?.id) return;
+  useEffect(() => {
+    const selectedClientId = window.location.hash.replace(
+      "#cliente-",
+      ""
+    );
+
+    if (!selectedClientId || showForm) return;
+
+    const client = clients.find(
+      (item) => item.id === selectedClientId
+    );
+
+    if (client) openEditClient(client);
+  }, [clients, showForm]);
+
+  function openNewClient() {
+    setEditingClient(null);
+    setName("");
+    setPhone("");
+    setBirthDate("");
+    setShowForm(true);
+  }
+
+  function openEditClient(client: Client) {
+    setEditingClient(client);
+    setName(client.name);
+    setPhone(client.phone ?? "");
+    setBirthDate(client.birth_date ?? "");
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingClient(null);
+    setName("");
+    setPhone("");
+    setBirthDate("");
+  }
+
+  async function saveClient() {
+    if (!household?.id) {
+      alert("Não foi possível identificar o estúdio.");
+      return;
+    }
+
+    if (!name.trim()) {
+      alert("Informe o nome da cliente.");
+      return;
+    }
+
+    setSaving(true);
 
     try {
-      if (item.source === "transaction") {
+      if (editingClient) {
         const { error } = await supabase
-          .from("transactions")
-          .update({ status: "paid" })
-          .eq("id", item.id)
+          .from("studio_clients")
+          .update({
+            name: name.trim(),
+            phone: phone.trim() || null,
+            birth_date: birthDate || null,
+          })
+          .eq("id", editingClient.id)
           .eq("household_id", household.id);
 
         if (error) throw error;
       } else {
-        const { data, error: fetchError } = await supabase
-          .from("studio_appointments")
-          .select("total_amount")
-          .eq("id", item.id)
-          .single();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-        if (fetchError) throw fetchError;
+        if (!user) {
+          throw new Error("Usuário não autenticado.");
+        }
 
         const { error } = await supabase
-          .from("studio_appointments")
-          .update({
-            received_amount: Number(data.total_amount),
-            status: "concluido",
-          })
-          .eq("id", item.id)
-          .eq("household_id", household.id);
+          .from("studio_clients")
+          .insert({
+            household_id: household.id,
+            created_by: user.id,
+            name: name.trim(),
+            phone: phone.trim() || null,
+            birth_date: birthDate || null,
+          });
 
         if (error) throw error;
       }
 
-      await queryClient.invalidateQueries();
+      await queryClient.invalidateQueries({
+        queryKey: ["studio-clients", household.id],
+      });
+
+      closeForm();
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Não foi possível atualizar o recebimento.");
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a cliente."
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
+  async function deleteClient(client: Client) {
+    const confirmed = window.confirm(
+      `Excluir a cliente "${client.name}"?`
+    );
+
+    if (!confirmed || !household?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from("studio_clients")
+        .delete()
+        .eq("id", client.id)
+        .eq("household_id", household.id);
+
+      if (error) throw error;
+
+      await queryClient.invalidateQueries({
+        queryKey: ["studio-clients", household.id],
+      });
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir a cliente."
+      );
+    }
+  }
+
+  function getPhone(client: Client) {
+    const phone = client.phone?.replace(/\D/g, "");
+
+    if (!phone) {
+      alert("Cadastre o WhatsApp da cliente primeiro.");
+      return null;
+    }
+
+    return phone;
+  }
+
+  function openWhatsApp(client: Client) {
+    const phone = getPhone(client);
+
+    if (!phone) return;
+
+    const message =
+      `Olá, ${client.name}! 💕\n\n` +
+      `Gostaríamos de confirmar seu atendimento.\n\n` +
+      `Pedimos, por favor, que chegue 5 minutos antes do horário agendado.\n\n` +
+      `Será um prazer receber você!\n` +
+      `Studio Lary Andrade`;
+
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+  }
+
+  function openBirthdayWhatsApp(client: Client) {
+    const phone = getPhone(client);
+
+    if (!phone) return;
+
+    const message =
+      `Olá, ${client.name}! 💕\n\n` +
+      `Passando para desejar um feliz aniversário! 🎂✨\n\n` +
+      `Que seu novo ciclo seja cheio de saúde, felicidade e momentos especiais.\n\n` +
+      `Um beijo,\n` +
+      `Studio Lary Andrade`;
+
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+  }
+
+  function formatBirthday(value: string) {
+    return new Date(`${value}T12:00:00`).toLocaleDateString(
+      "pt-BR",
+      {
+        day: "2-digit",
+        month: "long",
+      }
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-md px-5 pb-28 pt-6">
-        <header className="mb-8 flex items-center gap-3">
-          <Link
-            to="/inicio"
-            className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" strokeWidth={1.7} />
-          </Link>
+    <AppShell
+      title="Clientes"
+      subtitle={`${clients.length} ${
+        clients.length === 1 ? "cliente" : "clientes"
+      } cadastradas`}
+      action={
+        <button
+          type="button"
+          onClick={openNewClient}
+          aria-label="Nova cliente"
+          className="flex size-10 items-center justify-center rounded-full bg-[#b7838e] text-white shadow-sm transition-transform active:scale-95"
+        >
+          <Plus className="size-4.5" strokeWidth={1.9} />
+        </button>
+      }
+    >
+      <div className="relative">
+        <Search
+          className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#9b9597]"
+          strokeWidth={1.7}
+        />
 
-          <div>
-            <h1 className="text-balance-tight text-2xl font-semibold">
-              A receber
-            </h1>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar cliente..."
+          className="h-11 w-full rounded-2xl border border-black/[0.06] bg-white pl-11 pr-4 text-sm text-[#211f20] outline-none placeholder:text-[#aaa5a6] focus:border-[#b7838e]/50"
+        />
+      </div>
 
-            <p className="mt-1 text-sm text-muted-foreground">
-              Valores que ainda não entraram
-            </p>
+      <section className="mt-7">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[#211f20]">
+            Minhas clientes
+          </h2>
+
+          <span className="text-xs text-[#8a8587]">
+            {filteredClients.length}
+          </span>
+        </div>
+
+        {isLoading ? (
+          <div className="rounded-2xl border border-black/[0.05] bg-white px-4 py-7 text-center text-sm text-[#817b7d]">
+            Carregando...
           </div>
-        </header>
-
-        <section className="surface overflow-hidden">
-          <div className="p-6">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-              Total a receber
-            </p>
-
-            <p className="mt-2 text-4xl font-semibold tracking-tight">
-              R${" "}
-              {total.toLocaleString("pt-BR", {
-                minimumFractionDigits: 2,
-              })}
-            </p>
-
-            <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock3 className="size-3.5" strokeWidth={1.7} />
-              {receivables.length} valores pendentes
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-8">
-          <div className="mb-3">
-            <h2 className="text-sm font-semibold">
-              Pendências
-            </h2>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Organizadas por data de recebimento
-            </p>
-          </div>
-
-          {isLoading ? (
-            <div className="surface p-6 text-center text-sm text-muted-foreground">
-              Carregando...
-            </div>
-          ) : receivables.length === 0 ? (
-            <div className="surface p-6 text-center text-sm text-muted-foreground">
-              Nenhum valor pendente.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {receivables.map((item) => (
-                <div
-                  key={`${item.source}-${item.id}`}
-                  className="surface p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-income-soft text-income">
-                      <UserRound
-                        className="size-4.5"
-                        strokeWidth={1.6}
-                      />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">
-                        {item.client}
-                      </p>
-
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {item.service}
-                      </p>
-                    </div>
-
-                    <p className="text-sm font-semibold">
-                      R${" "}
-                      {item.amount.toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </p>
+        ) : filteredClients.length === 0 ? (
+          <EmptyState text="Nenhuma cliente encontrada." />
+        ) : (
+          <div className="space-y-2">
+            {filteredClients.map((client) => (
+              <div
+                key={client.id}
+                className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f3e5e8] text-[#a76f7d]">
+                    <UserRound
+                      className="size-5"
+                      strokeWidth={1.5}
+                    />
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <CalendarDays
-                        className="size-3.5"
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[#211f20]">
+                      {client.name}
+                    </p>
+
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-[#817b7d]">
+                      <Phone
+                        className="size-3"
                         strokeWidth={1.6}
                       />
-                      {item.date}
-                    </div>
+                      {client.phone ||
+                        "Telefone não informado"}
+                    </p>
 
-                    <button
-                      type="button"
-                      onClick={() => markReceived(item)}
-                      className="flex items-center gap-1.5 rounded-full bg-income-soft px-3 py-1.5 text-xs font-medium text-income transition-colors hover:bg-income/15"
-                    >
-                      <Check
-                        className="size-3.5"
-                        strokeWidth={2}
-                      />
-                      Recebido
-                    </button>
+                    {client.birth_date && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-[#817b7d]">
+                        <Cake
+                          className="size-3"
+                          strokeWidth={1.6}
+                        />
+                        {formatBirthday(
+                          client.birth_date
+                        )}
+                      </p>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
 
-        <div className="mt-8 rounded-2xl border border-dashed border-border px-5 py-4 text-center">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Quando um pagamento for recebido, marque como
-            <span className="font-medium text-foreground">
-              {" "}
-              recebido
-            </span>
-            . Ele passará a fazer parte automaticamente do
-            financeiro do mês.
-          </p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openWhatsApp(client)}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#f3e5e8] text-xs font-medium text-[#9d6875]"
+                  >
+                    <MessageCircle
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    WhatsApp
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openEditClient(client)}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] text-xs font-medium text-[#625d5f]"
+                  >
+                    <Pencil
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    Editar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => deleteClient(client)}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] text-xs font-medium text-[#8d696f]"
+                  >
+                    <Trash2
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    Excluir
+                  </button>
+                </div>
+
+                {client.birth_date && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openBirthdayWhatsApp(client)
+                    }
+                    className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f8eef0] text-xs font-medium text-[#9d6875]"
+                  >
+                    <Cake
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    Parabenizar no WhatsApp
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 px-4 pb-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-[#211f20]">
+                  {editingClient
+                    ? "Editar cliente"
+                    : "Nova cliente"}
+                </h2>
+
+                <p className="mt-1 text-xs text-[#817b7d]">
+                  Cadastre os dados básicos.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={saving}
+                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d] disabled:opacity-50"
+              >
+                <X
+                  className="size-4"
+                  strokeWidth={1.7}
+                />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <input
+                value={name}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
+                placeholder="Nome da cliente"
+                autoFocus
+                className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+              />
+
+              <input
+                value={phone}
+                onChange={(event) =>
+                  setPhone(event.target.value)
+                }
+                placeholder="WhatsApp / telefone"
+                inputMode="tel"
+                className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+              />
+
+              <label className="block">
+                <span className="mb-2 block text-xs text-[#817b7d]">
+                  Data de aniversário (opcional)
+                </span>
+
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(event) =>
+                    setBirthDate(event.target.value)
+                  }
+                  className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+                />
+              </label>
+
+              <button
+                type="button"
+                disabled={
+                  saving ||
+                  !name.trim()
+                }
+                onClick={saveClient}
+                className="h-11 w-full rounded-xl bg-[#b7838e] text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {saving
+                  ? "Salvando..."
+                  : editingClient
+                    ? "Salvar alterações"
+                    : "Cadastrar cliente"}
+              </button>
+            </div>
+          </div>
         </div>
-      </main>
-    </div>
+      )}
+    </AppShell>
   );
 }
