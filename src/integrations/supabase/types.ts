@@ -161,57 +161,230 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_appointments: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string
+          deposit_amount: number
+          household_id: string
+          id: string
+          notes: string | null
+          received_amount: number
+          scheduled_date: string
+          scheduled_time: string | null
+          service_id: string | null
+          service_name: string
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string
+          deposit_amount?: number
+          household_id: string
+          id?: string
+          notes?: string | null
+          received_amount?: number
+          scheduled_date: string
+          scheduled_time?: string | null
+          service_id?: string | null
+          service_name: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string
+          deposit_amount?: number
+          household_id?: string
+          id?: string
+          notes?: string | null
+          received_amount?: number
+          scheduled_date?: string
+          scheduled_time?: string | null
+          service_id?: string | null
+          service_name?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_appointments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "studio_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_appointments_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_appointments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "studio_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_clients: {
+        Row: {
+          created_at: string
+          created_by: string
+          household_id: string
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          household_id: string
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_clients_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_services: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string
+          default_price: number
+          household_id: string
+          icon: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          default_price?: number
+          household_id: string
+          icon?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          default_price?: number
+          household_id?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_services_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           account_id: string | null
           amount: number
+          appointment_id: string | null
           category: string
           created_at: string
           created_by: string
+          date: string | null
           description: string
-          due_date: string
+          due_date: string | null
           frequency: string
           household_id: string
           id: string
-          kind: string
+          kind: string | null
           recurring_value: string | null
           series_id: string | null
           status: string
+          type: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           account_id?: string | null
           amount: number
+          appointment_id?: string | null
           category?: string
           created_at?: string
           created_by?: string
+          date?: string | null
           description: string
-          due_date: string
+          due_date?: string | null
           frequency?: string
           household_id: string
           id?: string
-          kind: string
+          kind?: string | null
           recurring_value?: string | null
           series_id?: string | null
           status?: string
+          type?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           account_id?: string | null
           amount?: number
+          appointment_id?: string | null
           category?: string
           created_at?: string
           created_by?: string
+          date?: string | null
           description?: string
-          due_date?: string
+          due_date?: string | null
           frequency?: string
           household_id?: string
           id?: string
-          kind?: string
+          kind?: string | null
           recurring_value?: string | null
           series_id?: string | null
           status?: string
+          type?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -219,6 +392,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "studio_appointments"
             referencedColumns: ["id"]
           },
           {
