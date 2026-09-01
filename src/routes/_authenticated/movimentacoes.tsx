@@ -213,10 +213,19 @@ function MovimentacoesPage() {
 
       const householdId = await resolveHouseholdId();
 
-      const { error } = await supabase.from("transactions").insert({
-        household_id: householdId,
-        ...payload,
-      });
+const {
+  data: { user },
+  error: userError,
+} = await supabase.auth.getUser();
+
+if (userError) throw userError;
+if (!user) throw new Error("Usuário não autenticado.");
+
+const { error } = await supabase.from("transactions").insert({
+  household_id: householdId,
+  created_by: user.id,
+  ...payload,
+});
 
       if (error) throw error;
 
