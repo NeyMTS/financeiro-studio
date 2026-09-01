@@ -29,10 +29,10 @@ export function BottomNav() {
           ))}
 
           <div className="flex justify-center">
-            <Link
-              to="/movimentacoes"
-              search={{ novo: "1" }}
-              aria-label="Novo lançamento"
+
+          <Link
+  to="/movimentacoes"
+  aria-label="Novo lançamento"
               className="-mt-5 flex size-12 items-center justify-center rounded-full bg-[#b7838e] text-white shadow-lg shadow-[#b7838e]/20 ring-4 ring-white transition-transform active:scale-95"
             >
               <Plus className="size-5" strokeWidth={1.8} />
