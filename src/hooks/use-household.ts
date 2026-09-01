@@ -11,6 +11,10 @@ export type Household = {
  * Garante que o usuário logado tenha uma conta compartilhada e retorna o id.
  */
 export async function resolveHouseholdId(): Promise<string> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user) throw new Error("Usuária não autenticada.");
+
   const { data: memberships, error: membershipError } = await supabase
     .from("household_members")
     .select("household_id")
@@ -42,7 +46,7 @@ export async function resolveHouseholdId(): Promise<string> {
  */
 export function useHousehold() {
   return useQuery({
-    queryKey: ["household"],
+    queryKey: ["household", "current-user"],
     queryFn: async (): Promise<Household> => {
       const { data: memberships, error: membershipError } = await supabase
         .from("household_members")
@@ -57,8 +61,10 @@ export function useHousehold() {
           _name: "Nossa conta",
         });
         if (createError) throw createError;
-        householdId = created as string;
+        householdId = (created as string) ?? null;
       }
+
+      if (!householdId) throw new Error("Não foi possível preparar sua conta.");
 
       const { data: household, error } = await supabase
         .from("households")

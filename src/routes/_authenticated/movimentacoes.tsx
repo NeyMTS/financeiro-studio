@@ -206,6 +206,7 @@ function MovimentacoesPage() {
       !amount ||
       !date
     ) {
+      alert("Preencha descrição, valor e data da movimentação.");
       return;
     }
 
@@ -253,7 +254,7 @@ function MovimentacoesPage() {
       closeForm();
     } catch (error) {
       console.error(error);
-      alert("Não foi possível salvar a movimentação.");
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a movimentação.");
     } finally {
       setSaving(false);
     }
@@ -283,7 +284,7 @@ function MovimentacoesPage() {
       });
     } catch (error) {
       console.error(error);
-      alert("Não foi possível excluir a movimentação.");
+      alert(error instanceof Error ? error.message : "Não foi possível excluir a movimentação.");
     }
   }
 
@@ -304,7 +305,7 @@ function MovimentacoesPage() {
       });
     } catch (error) {
       console.error(error);
-      alert("Não foi possível atualizar o pagamento.");
+      alert(error instanceof Error ? error.message : "Não foi possível atualizar o pagamento.");
     }
   }
 

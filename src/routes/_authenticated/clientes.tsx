@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Cake,
   MessageCircle,
   Pencil,
   Phone,
@@ -10,7 +11,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
 import { AppShell, EmptyState } from "@/components/AppShell";
@@ -23,6 +24,7 @@ type Client = {
   id: string;
   name: string;
   phone: string | null;
+  birth_date: string | null;
   created_at: string;
 };
 
@@ -36,6 +38,7 @@ function ClientesPage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [saving, setSaving] = useState(false);
 
   const { data: clients = [], isLoading } = useQuery({
@@ -44,7 +47,7 @@ function ClientesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("studio_clients")
-        .select("id, name, phone, created_at")
+        .select("id, name, phone, birth_date, created_at")
         .eq("household_id", household!.id)
         .order("name", { ascending: true });
 
@@ -58,10 +61,18 @@ function ClientesPage() {
     client.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  useEffect(() => {
+    const selectedClientId = window.location.hash.replace("#cliente-", "");
+    if (!selectedClientId || showForm) return;
+    const client = clients.find((item) => item.id === selectedClientId);
+    if (client) openEditClient(client);
+  }, [clients, showForm]);
+
   function openNewClient() {
     setEditingClient(null);
     setName("");
     setPhone("");
+    setBirthDate("");
     setShowForm(true);
   }
 
@@ -69,6 +80,7 @@ function ClientesPage() {
     setEditingClient(client);
     setName(client.name);
     setPhone(client.phone ?? "");
+    setBirthDate(client.birth_date ?? "");
     setShowForm(true);
   }
 
@@ -79,6 +91,7 @@ function ClientesPage() {
     setEditingClient(null);
     setName("");
     setPhone("");
+    setBirthDate("");
   }
 
   async function saveClient() {
@@ -93,6 +106,7 @@ function ClientesPage() {
           .update({
             name: name.trim(),
             phone: phone.trim() || null,
+            birth_date: birthDate || null,
           })
           .eq("id", editingClient.id)
           .eq("household_id", household.id);
@@ -112,6 +126,7 @@ function ClientesPage() {
             created_by: user.id,
             name: name.trim(),
             phone: phone.trim() || null,
+            birth_date: birthDate || null,
           });
 
         if (error) throw error;
@@ -124,11 +139,7 @@ function ClientesPage() {
       closeForm();
     } catch (error) {
       console.error(error);
-      alert(
-        editingClient
-          ? "Não foi possível atualizar a cliente."
-          : "Não foi possível cadastrar a cliente."
-      );
+      alert(error instanceof Error ? error.message : "Não foi possível salvar a cliente.");
     } finally {
       setSaving(false);
     }
@@ -155,7 +166,7 @@ function ClientesPage() {
       });
     } catch (error) {
       console.error(error);
-      alert("Não foi possível excluir a cliente.");
+      alert(error instanceof Error ? error.message : "Não foi possível excluir a cliente.");
     }
   }
 
@@ -178,6 +189,29 @@ function ClientesPage() {
       `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
       "_blank"
     );
+  }
+
+  function openBirthdayWhatsApp(client: Client) {
+    if (!client.phone) {
+      alert("Cadastre o telefone da cliente primeiro.");
+      return;
+    }
+
+    const phone = client.phone.replace(/\D/g, "");
+    if (!phone) {
+      alert("O telefone cadastrado é inválido.");
+      return;
+    }
+
+    const message = `Olá, ${client.name}! 💕\n\nAqui é o Studio Lary Andrade.\n\nPassando para desejar um feliz aniversário! 🎂✨\n\nQue seu novo ciclo seja cheio de coisas boas, saúde, felicidade e muitos momentos especiais.\n\nUm beijo,\n\nStudio Lary Andrade 💕`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+  }
+
+  function formatBirthday(value: string) {
+    return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+    });
   }
 
   return (
@@ -256,6 +290,12 @@ function ClientesPage() {
                       />
                       {client.phone || "Telefone não informado"}
                     </p>
+                    {client.birth_date && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-[#817b7d]">
+                        <Cake className="size-3" strokeWidth={1.6} />
+                        {formatBirthday(client.birth_date)}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -296,6 +336,16 @@ function ClientesPage() {
                     Excluir
                   </button>
                 </div>
+                {client.birth_date && (
+                  <button
+                    type="button"
+                    onClick={() => openBirthdayWhatsApp(client)}
+                    className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f8eef0] text-xs font-medium text-[#9d6875]"
+                  >
+                    <Cake className="size-3.5" strokeWidth={1.7} />
+                    Parabenizar no WhatsApp
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -343,6 +393,16 @@ function ClientesPage() {
                 inputMode="tel"
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
               />
+
+              <label className="block">
+                <span className="mb-2 block text-xs text-[#817b7d]">Data de aniversário (opcional)</span>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(event) => setBirthDate(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+                />
+              </label>
 
               <button
                 type="button"

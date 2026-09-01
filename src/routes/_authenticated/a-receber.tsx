@@ -135,7 +135,7 @@ function AReceberPage() {
       await queryClient.invalidateQueries();
     } catch (error) {
       console.error(error);
-      alert("Não foi possível atualizar o recebimento.");
+      alert(error instanceof Error ? error.message : "Não foi possível atualizar o recebimento.");
     }
   }
 
