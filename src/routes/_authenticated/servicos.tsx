@@ -1,78 +1,196 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  Plus,
-  Sparkles,
   Eye,
-  Scissors,
-  Hand,
   Heart,
+  Hand,
+  Plus,
+  Scissors,
+  Sparkles,
   Star,
   MoreHorizontal,
 } from "lucide-react";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useHousehold } from "@/hooks/use-household";
 
 export const Route = createFileRoute("/_authenticated/servicos")({
   component: ServicosPage,
 });
 
-const iconOptions = [
-  { name: "sparkles", icon: Sparkles },
-  { name: "olhos", icon: Eye },
-  { name: "cabelo", icon: Scissors },
-  { name: "unhas", icon: Hand },
-  { name: "beleza", icon: Heart },
-  { name: "especial", icon: Star },
-  { name: "outros", icon: MoreHorizontal },
-];
-
-const services = [
-  {
-    name: "Maquiagem",
-    price: 180,
-    icon: Sparkles,
-  },
-  {
-    name: "Cílios",
-    price: 150,
-    icon: Eye,
-  },
-  {
-    name: "Design de sobrancelhas",
-    price: 70,
-    icon: Heart,
-  },
-];
+const icons = {
+  sparkles: Sparkles,
+  olhos: Eye,
+  cabelo: Scissors,
+  unhas: Hand,
+  beleza: Heart,
+  especial: Star,
+  outros: MoreHorizontal,
+};
 
 function ServicosPage() {
+  const { data: household } = useHousehold();
+  const queryClient = useQueryClient();
+
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [icon, setIcon] = useState("sparkles");
+  const [saving, setSaving] = useState(false);
+
+  const { data: services = [], isLoading } = useQuery({
+    queryKey: ["studio-services", household?.id],
+    enabled: Boolean(household?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("studio_services")
+        .select("id, name, default_price, icon, active")
+        .eq("household_id", household!.id)
+        .eq("active", true)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+
+      return data ?? [];
+    },
+  });
+
+  async function createService() {
+    if (!household?.id || !name.trim()) return;
+
+    setSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) throw new Error("Usuário não autenticado.");
+
+      const value = Number(
+        price.replace(/\./g, "").replace(",", ".")
+      );
+
+      const { error } = await supabase
+        .from("studio_services")
+        .insert({
+          household_id: household.id,
+          created_by: user.id,
+          name: name.trim(),
+          default_price: Number.isFinite(value) ? value : 0,
+          icon,
+        });
+
+      if (error) throw error;
+
+      setName("");
+      setPrice("");
+      setIcon("sparkles");
+      setShowForm(false);
+
+      await queryClient.invalidateQueries({
+        queryKey: ["studio-services", household.id],
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Não foi possível cadastrar o serviço.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-md px-5 pb-28 pt-6">
-        <header className="mb-8 flex items-center gap-3">
-          <Link
-            to="/inicio"
-            className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" strokeWidth={1.7} />
-          </Link>
+        <header className="mb-7 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/inicio"
+              className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground"
+            >
+              <ArrowLeft className="size-4" strokeWidth={1.7} />
+            </Link>
 
-          <div>
-            <h1 className="text-balance-tight text-2xl font-semibold">
-              Serviços
-            </h1>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Serviços
+              </h1>
 
-            <p className="mt-1 text-sm text-muted-foreground">
-              Seus procedimentos e valores
-            </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Procedimentos e valores
+              </p>
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowForm((value) => !value)}
+            className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
+          >
+            <Plus className="size-4.5" strokeWidth={2} />
+          </button>
         </header>
 
-        <button
-          type="button"
-          className="mb-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
-        >
-          <Plus className="size-4" strokeWidth={2} />
-          Novo serviço
-        </button>
+        {showForm && (
+          <section className="surface mb-6 p-5">
+            <h2 className="text-sm font-semibold">
+              Novo serviço
+            </h2>
+
+            <div className="mt-4 space-y-3">
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Nome do serviço"
+                className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none focus:border-income/40"
+              />
+
+              <input
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                placeholder="Valor padrão"
+                inputMode="decimal"
+                className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none focus:border-income/40"
+              />
+
+              <div>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Ícone
+                </p>
+
+                <div className="grid grid-cols-7 gap-2">
+                  {Object.entries(icons).map(([key, Icon]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setIcon(key)}
+                      className={`flex aspect-square items-center justify-center rounded-xl border transition-colors ${
+                        icon === key
+                          ? "border-income bg-income-soft text-income"
+                          : "border-border bg-background text-muted-foreground"
+                      }`}
+                    >
+                      <Icon
+                        className="size-4"
+                        strokeWidth={1.6}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={saving || !name.trim()}
+                onClick={createService}
+                className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {saving ? "Salvando..." : "Cadastrar serviço"}
+              </button>
+            </div>
+          </section>
+        )}
 
         <section>
           <div className="mb-3 flex items-center justify-between">
@@ -85,81 +203,65 @@ function ServicosPage() {
             </span>
           </div>
 
-          <div className="space-y-2">
-            {services.map((service) => {
-              const Icon = service.icon;
+          {isLoading ? (
+            <div className="surface px-4 py-6 text-center text-sm text-muted-foreground">
+              Carregando...
+            </div>
+          ) : services.length === 0 ? (
+            <div className="surface px-5 py-8 text-center">
+              <Sparkles className="mx-auto size-6 text-muted-foreground" />
 
-              return (
-                <div
-                  key={service.name}
-                  className="surface flex items-center gap-4 px-4 py-4"
-                >
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-income-soft text-income">
-                    <Icon className="size-5" strokeWidth={1.6} />
-                  </div>
+              <p className="mt-3 text-sm font-medium">
+                Nenhum serviço cadastrado
+              </p>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">
-                      {service.name}
-                    </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Cadastre seus primeiros procedimentos.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {services.map((service) => {
+                const Icon =
+                  icons[service.icon as keyof typeof icons] ??
+                  Sparkles;
 
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Valor padrão
-                    </p>
-                  </div>
+                return (
+                  <div
+                    key={service.id}
+                    className="surface flex items-center gap-4 px-4 py-4"
+                  >
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-income-soft text-income">
+                      <Icon
+                        className="size-5"
+                        strokeWidth={1.6}
+                      />
+                    </div>
 
-                  <div className="text-right">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {service.name}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Valor padrão
+                      </p>
+                    </div>
+
                     <p className="text-sm font-semibold">
                       R${" "}
-                      {service.price.toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
+                      {Number(service.default_price).toLocaleString(
+                        "pt-BR",
+                        {
+                          minimumFractionDigits: 2,
+                        }
+                      )}
                     </p>
-
-                    <button
-                      type="button"
-                      className="mt-1 text-[11px] font-medium text-slateblue"
-                    >
-                      Editar
-                    </button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="mt-8">
-          <div className="surface p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-accent text-income">
-                <Sparkles className="size-5" strokeWidth={1.6} />
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold">
-                  Ícones dos serviços
-                </p>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Escolha um ícone para identificar cada procedimento.
-                </p>
-              </div>
+                );
+              })}
             </div>
-
-            <div className="mt-4 grid grid-cols-7 gap-2">
-              {iconOptions.map(({ name, icon: Icon }) => (
-                <button
-                  key={name}
-                  type="button"
-                  aria-label={`Ícone ${name}`}
-                  className="flex aspect-square items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition-colors hover:border-income/40 hover:bg-income-soft hover:text-income"
-                >
-                  <Icon className="size-4" strokeWidth={1.6} />
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
         </section>
       </main>
     </div>
