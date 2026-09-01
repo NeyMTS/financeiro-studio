@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Cake,
   CalendarDays,
   ChevronRight,
   LogOut,
@@ -37,6 +38,12 @@ type Appointment = {
     | { name: string }
     | { name: string }[]
     | null;
+};
+
+type BirthdayClient = {
+  id: string;
+  name: string;
+  birth_date: string;
 };
 
 function InicioPage() {
@@ -144,6 +151,37 @@ function InicioPage() {
     },
   });
 
+  const { data: birthdayClients = [] } = useQuery({
+    queryKey: ["studio-birthdays", household?.id],
+    enabled: Boolean(household?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("studio_clients")
+        .select("id, name, birth_date")
+        .eq("household_id", household?.id ?? "")
+        .not("birth_date", "is", null);
+
+      if (error) throw error;
+      return (data ?? []) as BirthdayClient[];
+    },
+  });
+
+  const birthdays = birthdayClients
+    .flatMap((client) => {
+      const [, month, day] = client.birth_date.split("-").map(Number);
+      if (!month || !day) return [];
+      let nextDate = new Date(today.getFullYear(), month - 1, day);
+      const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (nextDate < startToday) nextDate = new Date(today.getFullYear() + 1, month - 1, day);
+      const daysUntil = Math.round((nextDate.getTime() - startToday.getTime()) / 86_400_000);
+      return [{ ...client, nextDate, daysUntil }];
+    })
+    .filter((client) => client.daysUntil <= 30)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+
+  const birthdaysToday = birthdays.filter((client) => client.daysUntil === 0);
+  const upcomingBirthdays = birthdays.filter((client) => client.daysUntil > 0);
+
   const received = transactions
     .filter(
       (item) =>
@@ -229,6 +267,46 @@ function InicioPage() {
         </button>
       }
     >
+      {birthdaysToday.map((client) => (
+        <Link
+          key={client.id}
+          to="/clientes"
+          hash={`cliente-${client.id}`}
+          className="mb-3 flex items-center gap-3 rounded-2xl bg-[#f3e5e8] p-4 text-[#9d6875]"
+        >
+          <Cake className="size-5 shrink-0" strokeWidth={1.7} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[#211f20]">Hoje é aniversário de {client.name}! 🎂</p>
+            <p className="mt-1 text-xs text-[#8d6871]">Toque para abrir o cadastro da cliente</p>
+          </div>
+          <ChevronRight className="size-4 shrink-0" />
+        </Link>
+      ))}
+
+      {upcomingBirthdays.length > 0 && (
+        <section className="mb-5 rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-[#9d6875]">
+            <Cake className="size-4" strokeWidth={1.7} />
+            <h2 className="text-sm font-semibold text-[#211f20]">Próximos aniversários</h2>
+          </div>
+          <div className="mt-3 space-y-2">
+            {upcomingBirthdays.slice(0, 3).map((client) => (
+              <Link
+                key={client.id}
+                to="/clientes"
+                hash={`cliente-${client.id}`}
+                className="flex items-center justify-between gap-3 text-xs"
+              >
+                <span className="truncate font-medium text-[#625d5f]">{client.name}</span>
+                <span className="shrink-0 text-[#817b7d]">
+                  {client.nextDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* RESUMO PRINCIPAL */}
       <section className="rounded-[26px] bg-[#b7838e] p-5 text-white shadow-sm">
         <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/70">

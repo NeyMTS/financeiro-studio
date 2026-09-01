@@ -158,11 +158,7 @@ function ServicosPage() {
       closeForm();
     } catch (error) {
       console.error(error);
-      alert(
-        editingService
-          ? "Não foi possível atualizar o serviço."
-          : "Não foi possível cadastrar o serviço."
-      );
+      alert(error instanceof Error ? error.message : "Não foi possível salvar o serviço.");
     } finally {
       setSaving(false);
     }
@@ -189,7 +185,7 @@ function ServicosPage() {
       });
     } catch (error) {
       console.error(error);
-      alert("Não foi possível excluir o serviço.");
+      alert(error instanceof Error ? error.message : "Não foi possível excluir o serviço.");
     }
   }
 

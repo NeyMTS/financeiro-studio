@@ -239,6 +239,7 @@ export type Database = {
       }
       studio_clients: {
         Row: {
+          birth_date: string | null
           created_at: string
           created_by: string
           household_id: string
@@ -249,6 +250,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          birth_date?: string | null
           created_at?: string
           created_by?: string
           household_id: string
@@ -259,6 +261,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          birth_date?: string | null
           created_at?: string
           created_by?: string
           household_id?: string

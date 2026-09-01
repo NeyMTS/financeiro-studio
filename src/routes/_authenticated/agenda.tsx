@@ -23,6 +23,8 @@ export const Route = createFileRoute("/_authenticated/agenda")({
 
 type Appointment = {
   id: string;
+  client_id: string | null;
+  service_id: string | null;
   service_name: string;
   total_amount: number;
   deposit_amount: number;
@@ -133,6 +135,8 @@ function AgendaPage() {
         .select(
           `
           id,
+          client_id,
+          service_id,
           service_name,
           total_amount,
           deposit_amount,
@@ -230,17 +234,9 @@ function AgendaPage() {
       ? appointment.studio_clients[0]
       : appointment.studio_clients;
 
-    const foundClient = clients.find(
-      (item) => item.name === client?.name
-    );
-
-    const foundService = services.find(
-      (item) => item.name === appointment.service_name
-    );
-
     setEditing(appointment);
-    setClientId(foundClient?.id ?? "");
-    setServiceId(foundService?.id ?? "");
+    setClientId(appointment.client_id ?? "");
+    setServiceId(appointment.service_id ?? "");
     setServiceName(appointment.service_name);
     setTotal(formatMoney(Number(appointment.total_amount)));
     setDeposit(formatMoney(Number(appointment.deposit_amount)));
@@ -376,7 +372,7 @@ function AgendaPage() {
     } catch (error) {
       console.error(error);
 
-      alert("Não foi possível excluir o agendamento.");
+      alert(error instanceof Error ? error.message : "Não foi possível excluir o agendamento.");
     }
   }
 
