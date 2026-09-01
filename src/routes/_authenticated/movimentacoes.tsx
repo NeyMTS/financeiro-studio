@@ -1,80 +1,144 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Eye,
-  Hand,
-  Heart,
-  MoreHorizontal,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Check,
   Pencil,
   Plus,
-  Scissors,
-  Sparkles,
-  Star,
   Trash2,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
 import { AppShell, EmptyState } from "@/components/AppShell";
 
-export const Route = createFileRoute("/_authenticated/servicos")({
-  component: ServicosPage,
+export const Route = createFileRoute(
+  "/_authenticated/movimentacoes"
+)({
+  component: MovimentacoesPage,
 });
 
-const icons = {
-  sparkles: Sparkles,
-  olhos: Eye,
-  cabelo: Scissors,
-  unhas: Hand,
-  beleza: Heart,
-  especial: Star,
-  outros: MoreHorizontal,
-};
-
-type Service = {
+type Transaction = {
   id: string;
-  name: string;
-  default_price: number;
-  icon: string | null;
-  active: boolean;
+  description: string;
+  amount: number;
+  type: "income" | "expense";
+  date: string;
+  status: string | null;
+  category: string | null;
 };
 
-function ServicosPage() {
+function MovimentacoesPage() {
   const { data: household } = useHousehold();
   const queryClient = useQueryClient();
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingService, setEditingService] =
-    useState<Service | null>(null);
+  const today = new Date();
 
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [icon, setIcon] = useState("sparkles");
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+
+  const [filter, setFilter] = useState<
+    "all" | "income" | "expense"
+  >("all");
+
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(
+    null
+  );
+
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [type, setType] = useState<"income" | "expense">(
+    "income"
+  );
+  const [date, setDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [status, setStatus] = useState("paid");
   const [saving, setSaving] = useState(false);
 
-  const { data: services = [], isLoading } = useQuery({
-    queryKey: ["studio-services", household?.id],
+  const monthStart = `${selectedMonth.getFullYear()}-${String(
+    selectedMonth.getMonth() + 1
+  ).padStart(2, "0")}-01`;
+
+  const monthEndDate = new Date(
+    selectedMonth.getFullYear(),
+    selectedMonth.getMonth() + 1,
+    0
+  );
+
+  const monthEnd = `${monthEndDate.getFullYear()}-${String(
+    monthEndDate.getMonth() + 1
+  ).padStart(2, "0")}-${String(
+    monthEndDate.getDate()
+  ).padStart(2, "0")}`;
+
+  const monthLabel = selectedMonth.toLocaleDateString(
+    "pt-BR",
+    {
+      month: "long",
+      year: "numeric",
+    }
+  );
+
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: [
+      "studio-transactions",
+      household?.id,
+      monthStart,
+      monthEnd,
+    ],
     enabled: Boolean(household?.id),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("studio_services")
-        .select("id, name, default_price, icon, active")
+        .from("transactions")
+        .select(
+          "id, description, amount, type, date, status, category"
+        )
         .eq("household_id", household!.id)
-        .eq("active", true)
-        .order("name", { ascending: true });
+        .gte("date", monthStart)
+        .lte("date", monthEnd)
+        .order("date", { ascending: false });
 
       if (error) throw error;
 
-      return (data ?? []) as Service[];
+      return (data ?? []) as Transaction[];
     },
   });
 
-  function parseMoney(value: string) {
-    return (
-      Number(value.replace(/\./g, "").replace(",", ".")) || 0
+  const visibleTransactions = useMemo(() => {
+    if (filter === "all") return transactions;
+
+    return transactions.filter(
+      (transaction) => transaction.type === filter
     );
-  }
+  }, [transactions, filter]);
+
+  const totals = useMemo(() => {
+    const income = transactions
+      .filter((item) => item.type === "income")
+      .filter((item) => item.status !== "pending")
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+
+    const expense = transactions
+      .filter((item) => item.type === "expense")
+      .filter((item) => item.status !== "pending")
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+
+    const pending = transactions
+      .filter((item) => item.status === "pending")
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+
+    return {
+      income,
+      expense,
+      balance: income - expense,
+      pending,
+    };
+  }, [transactions]);
 
   function formatMoney(value: number) {
     return value.toLocaleString("pt-BR", {
@@ -82,19 +146,49 @@ function ServicosPage() {
     });
   }
 
+  function parseMoney(value: string) {
+    return (
+      Number(value.replace(/\./g, "").replace(",", ".")) || 0
+    );
+  }
+
+  function previousMonth() {
+    setSelectedMonth(
+      new Date(
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() - 1,
+        1
+      )
+    );
+  }
+
+  function nextMonth() {
+    setSelectedMonth(
+      new Date(
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() + 1,
+        1
+      )
+    );
+  }
+
   function openNew() {
-    setEditingService(null);
-    setName("");
-    setPrice("");
-    setIcon("sparkles");
+    setEditing(null);
+    setDescription("");
+    setAmount("");
+    setType("income");
+    setDate(new Date().toISOString().slice(0, 10));
+    setStatus("paid");
     setShowForm(true);
   }
 
-  function openEdit(service: Service) {
-    setEditingService(service);
-    setName(service.name);
-    setPrice(formatMoney(Number(service.default_price)));
-    setIcon(service.icon || "sparkles");
+  function openEdit(transaction: Transaction) {
+    setEditing(transaction);
+    setDescription(transaction.description);
+    setAmount(formatMoney(Number(transaction.amount)));
+    setType(transaction.type);
+    setDate(transaction.date);
+    setStatus(transaction.status || "paid");
     setShowForm(true);
   }
 
@@ -102,14 +196,18 @@ function ServicosPage() {
     if (saving) return;
 
     setShowForm(false);
-    setEditingService(null);
-    setName("");
-    setPrice("");
-    setIcon("sparkles");
+    setEditing(null);
   }
 
-  async function saveService() {
-    if (!household?.id || !name.trim()) return;
+  async function saveTransaction() {
+    if (
+      !household?.id ||
+      !description.trim() ||
+      !amount ||
+      !date
+    ) {
+      return;
+    }
 
     setSaving(true);
 
@@ -118,85 +216,102 @@ function ServicosPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        throw new Error("Usuário não autenticado.");
-      }
+      if (!user) throw new Error("Usuário não autenticado.");
 
-      const value = parseMoney(price);
+      const payload = {
+        description: description.trim(),
+        amount: parseMoney(amount),
+        type,
+        date,
+        status,
+      };
 
-      if (editingService) {
+      if (editing) {
         const { error } = await supabase
-          .from("studio_services")
-          .update({
-            name: name.trim(),
-            default_price: value,
-            icon,
-          })
-          .eq("id", editingService.id)
+          .from("transactions")
+          .update(payload)
+          .eq("id", editing.id)
           .eq("household_id", household.id);
 
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("studio_services")
+          .from("transactions")
           .insert({
             household_id: household.id,
-            created_by: user.id,
-            name: name.trim(),
-            default_price: value,
-            icon,
-            active: true,
+            user_id: user.id,
+            ...payload,
           });
 
         if (error) throw error;
       }
 
       await queryClient.invalidateQueries({
-        queryKey: ["studio-services", household.id],
+        queryKey: ["studio-transactions"],
       });
 
       closeForm();
     } catch (error) {
       console.error(error);
-      alert(
-        editingService
-          ? "Não foi possível atualizar o serviço."
-          : "Não foi possível cadastrar o serviço."
-      );
+      alert("Não foi possível salvar a movimentação.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteService(service: Service) {
-    const confirmed = window.confirm(
-      `Excluir o serviço "${service.name}"?`
-    );
-
-    if (!confirmed || !household?.id) return;
+  async function deleteTransaction(transaction: Transaction) {
+    if (
+      !window.confirm(
+        `Excluir "${transaction.description}"?`
+      ) ||
+      !household?.id
+    ) {
+      return;
+    }
 
     try {
       const { error } = await supabase
-        .from("studio_services")
-        .update({ active: false })
-        .eq("id", service.id)
+        .from("transactions")
+        .delete()
+        .eq("id", transaction.id)
         .eq("household_id", household.id);
 
       if (error) throw error;
 
       await queryClient.invalidateQueries({
-        queryKey: ["studio-services", household.id],
+        queryKey: ["studio-transactions"],
       });
     } catch (error) {
       console.error(error);
-      alert("Não foi possível excluir o serviço.");
+      alert("Não foi possível excluir a movimentação.");
+    }
+  }
+
+  async function markAsPaid(transaction: Transaction) {
+    if (!household?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ status: "paid" })
+        .eq("id", transaction.id)
+        .eq("household_id", household.id);
+
+      if (error) throw error;
+
+      await queryClient.invalidateQueries({
+        queryKey: ["studio-transactions"],
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Não foi possível atualizar o pagamento.");
     }
   }
 
   return (
     <AppShell
-      title="Serviços"
-      subtitle="Procedimentos e valores"
+      title="Financeiro"
+      subtitle="Entradas, gastos e recebimentos"
       action={
         <button
           type="button"
@@ -207,82 +322,206 @@ function ServicosPage() {
         </button>
       }
     >
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#211f20]">
-            Meus serviços
-          </h2>
+      <div className="flex items-center justify-between rounded-2xl border border-black/[0.05] bg-white px-3 py-2 shadow-sm">
+        <button
+          type="button"
+          onClick={previousMonth}
+          className="flex size-9 items-center justify-center rounded-full text-[#817b7d]"
+        >
+          ‹
+        </button>
 
-          <span className="text-xs text-[#817b7d]">
-            {services.length} cadastrados
-          </span>
+        <p className="text-sm font-semibold capitalize text-[#211f20]">
+          {monthLabel}
+        </p>
+
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="flex size-9 items-center justify-center rounded-full text-[#817b7d]"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-2">
+        <div className="rounded-2xl bg-[#f3e5e8] p-4">
+          <p className="text-xs text-[#8d6871]">Recebido</p>
+          <p className="mt-1 text-lg font-semibold text-[#211f20]">
+            R$ {formatMoney(totals.income)}
+          </p>
         </div>
 
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
+          <p className="text-xs text-[#817b7d]">Gastos</p>
+          <p className="mt-1 text-lg font-semibold text-[#211f20]">
+            R$ {formatMoney(totals.expense)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
+          <p className="text-xs text-[#817b7d]">Saldo</p>
+          <p className="mt-1 text-lg font-semibold text-[#211f20]">
+            R$ {formatMoney(totals.balance)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-[#f8eef0] p-4">
+          <p className="text-xs text-[#8d6871]">
+            A receber / pendente
+          </p>
+          <p className="mt-1 text-lg font-semibold text-[#211f20]">
+            R$ {formatMoney(totals.pending)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 flex gap-2 overflow-x-auto">
+        {[
+          ["all", "Todos"],
+          ["income", "Entradas"],
+          ["expense", "Gastos"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() =>
+              setFilter(value as "all" | "income" | "expense")
+            }
+            className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium ${
+              filter === value
+                ? "bg-[#b7838e] text-white"
+                : "bg-white text-[#817b7d] ring-1 ring-black/[0.05]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <section className="mt-6">
         {isLoading ? (
-          <div className="rounded-2xl border border-black/[0.05] bg-white px-4 py-7 text-center text-sm text-[#817b7d]">
+          <div className="rounded-2xl bg-white px-4 py-8 text-center text-sm text-[#817b7d]">
             Carregando...
           </div>
-        ) : services.length === 0 ? (
-          <EmptyState text="Nenhum serviço cadastrado." />
+        ) : visibleTransactions.length === 0 ? (
+          <EmptyState text="Nenhuma movimentação neste mês." />
         ) : (
           <div className="space-y-2">
-            {services.map((service) => {
-              const Icon =
-                icons[service.icon as keyof typeof icons] ??
-                Sparkles;
+            {visibleTransactions.map((transaction) => {
+              const isIncome = transaction.type === "income";
+              const isPending =
+                transaction.status === "pending";
 
               return (
                 <div
-                  key={service.id}
+                  key={transaction.id}
                   className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#f3e5e8] text-[#9d6875]">
-                      <Icon
-                        className="size-5"
-                        strokeWidth={1.6}
-                      />
+                    <div
+                      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                        isIncome
+                          ? "bg-[#f3e5e8] text-[#9d6875]"
+                          : "bg-[#f5f3f2] text-[#625d5f]"
+                      }`}
+                    >
+                      {isIncome ? (
+                        <ArrowUpCircle
+                          className="size-5"
+                          strokeWidth={1.6}
+                        />
+                      ) : (
+                        <ArrowDownCircle
+                          className="size-5"
+                          strokeWidth={1.6}
+                        />
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-[#211f20]">
-                        {service.name}
+                        {transaction.description}
                       </p>
 
                       <p className="mt-1 text-xs text-[#817b7d]">
-                        Valor padrão
+                        {new Date(
+                          `${transaction.date}T12:00:00`
+                        ).toLocaleDateString("pt-BR")}
+                        {transaction.category
+                          ? ` · ${transaction.category}`
+                          : ""}
                       </p>
                     </div>
 
-                    <p className="shrink-0 text-sm font-semibold text-[#211f20]">
-                      R$ {formatMoney(Number(service.default_price))}
+                    <p
+                      className={`shrink-0 text-sm font-semibold ${
+                        isIncome
+                          ? "text-[#9d6875]"
+                          : "text-[#211f20]"
+                      }`}
+                    >
+                      {isIncome ? "+" : "-"} R${" "}
+                      {formatMoney(Number(transaction.amount))}
                     </p>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-black/[0.05] pt-3">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(service)}
-                      className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] text-xs font-medium text-[#625d5f]"
+                  <div className="mt-3 flex items-center justify-between border-t border-black/[0.05] pt-3">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
+                        isPending
+                          ? "bg-[#f8eee0] text-[#9a7654]"
+                          : "bg-[#edf5ef] text-[#64816b]"
+                      }`}
                     >
-                      <Pencil
-                        className="size-3.5"
-                        strokeWidth={1.7}
-                      />
-                      Editar
-                    </button>
+                      {isPending ? "A receber" : "Pago"}
+                    </span>
 
-                    <button
-                      type="button"
-                      onClick={() => deleteService(service)}
-                      className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] text-xs font-medium text-[#8d696f]"
-                    >
-                      <Trash2
-                        className="size-3.5"
-                        strokeWidth={1.7}
-                      />
-                      Excluir
-                    </button>
+                    <div className="flex gap-2">
+                      {isPending && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            markAsPaid(transaction)
+                          }
+                          className="flex size-8 items-center justify-center rounded-lg bg-[#edf5ef] text-[#64816b]"
+                          aria-label="Marcar como pago"
+                        >
+                          <Check
+                            className="size-4"
+                            strokeWidth={1.8}
+                          />
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openEdit(transaction)
+                        }
+                        className="flex size-8 items-center justify-center rounded-lg bg-[#f6f3f3] text-[#625d5f]"
+                        aria-label="Editar"
+                      >
+                        <Pencil
+                          className="size-3.5"
+                          strokeWidth={1.7}
+                        />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteTransaction(transaction)
+                        }
+                        className="flex size-8 items-center justify-center rounded-lg bg-[#f6f3f3] text-[#8d696f]"
+                        aria-label="Excluir"
+                      >
+                        <Trash2
+                          className="size-3.5"
+                          strokeWidth={1.7}
+                        />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -297,13 +536,13 @@ function ServicosPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-[#211f20]">
-                  {editingService
-                    ? "Editar serviço"
-                    : "Novo serviço"}
+                  {editing
+                    ? "Editar movimentação"
+                    : "Nova movimentação"}
                 </h2>
 
                 <p className="mt-1 text-xs text-[#817b7d]">
-                  Nome, valor e ícone do procedimento.
+                  Registre uma entrada ou um gasto.
                 </p>
               </div>
 
@@ -317,64 +556,88 @@ function ServicosPage() {
             </div>
 
             <div className="mt-5 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setType("income")}
+                  className={`h-10 rounded-xl text-sm font-medium ${
+                    type === "income"
+                      ? "bg-[#f3e5e8] text-[#9d6875]"
+                      : "bg-[#faf9f8] text-[#817b7d]"
+                  }`}
+                >
+                  Entrada
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setType("expense")}
+                  className={`h-10 rounded-xl text-sm font-medium ${
+                    type === "expense"
+                      ? "bg-[#ece9e7] text-[#625d5f]"
+                      : "bg-[#faf9f8] text-[#817b7d]"
+                  }`}
+                >
+                  Gasto
+                </button>
+              </div>
+
               <input
-                value={name}
+                value={description}
                 onChange={(event) =>
-                  setName(event.target.value)
+                  setDescription(event.target.value)
                 }
-                placeholder="Nome do serviço"
+                placeholder="Descrição"
                 autoFocus
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
               />
 
               <input
-                value={price}
+                value={amount}
                 onChange={(event) =>
-                  setPrice(event.target.value)
+                  setAmount(event.target.value)
                 }
-                placeholder="Valor padrão"
+                placeholder="Valor"
                 inputMode="decimal"
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
               />
 
-              <div>
-                <p className="mb-2 text-xs text-[#817b7d]">
-                  Ícone
-                </p>
+              <input
+                type="date"
+                value={date}
+                onChange={(event) =>
+                  setDate(event.target.value)
+                }
+                className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+              />
 
-                <div className="grid grid-cols-7 gap-2">
-                  {Object.entries(icons).map(([key, Icon]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setIcon(key)}
-                      aria-label={`Ícone ${key}`}
-                      className={`flex aspect-square items-center justify-center rounded-xl border transition-colors ${
-                        icon === key
-                          ? "border-[#b7838e] bg-[#f3e5e8] text-[#9d6875]"
-                          : "border-black/[0.06] bg-[#faf9f8] text-[#817b7d]"
-                      }`}
-                    >
-                      <Icon
-                        className="size-4"
-                        strokeWidth={1.6}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <select
+                value={status}
+                onChange={(event) =>
+                  setStatus(event.target.value)
+                }
+                className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+              >
+                <option value="paid">Pago / Recebido</option>
+                <option value="pending">A receber / Pendente</option>
+              </select>
 
               <button
                 type="button"
-                disabled={saving || !name.trim()}
-                onClick={saveService}
+                disabled={
+                  saving ||
+                  !description.trim() ||
+                  !amount ||
+                  !date
+                }
+                onClick={saveTransaction}
                 className="h-11 w-full rounded-xl bg-[#b7838e] text-sm font-semibold text-white disabled:opacity-50"
               >
                 {saving
                   ? "Salvando..."
-                  : editingService
+                  : editing
                     ? "Salvar alterações"
-                    : "Cadastrar serviço"}
+                    : "Adicionar movimentação"}
               </button>
             </div>
           </div>
