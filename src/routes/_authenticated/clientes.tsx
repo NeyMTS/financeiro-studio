@@ -1,28 +1,41 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  ChevronRight,
+  MessageCircle,
+  Pencil,
+  Phone,
   Plus,
   Search,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
+import { AppShell, EmptyState } from "@/components/AppShell";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   component: ClientesPage,
 });
+
+type Client = {
+  id: string;
+  name: string;
+  phone: string | null;
+  created_at: string;
+};
 
 function ClientesPage() {
   const { data: household } = useHousehold();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const { data: clients = [], isLoading } = useQuery({
@@ -37,7 +50,7 @@ function ClientesPage() {
 
       if (error) throw error;
 
-      return data ?? [];
+      return (data ?? []) as Client[];
     },
   });
 
@@ -45,160 +58,186 @@ function ClientesPage() {
     client.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  async function createClient() {
+  function openNewClient() {
+    setEditingClient(null);
+    setName("");
+    setPhone("");
+    setShowForm(true);
+  }
+
+  function openEditClient(client: Client) {
+    setEditingClient(client);
+    setName(client.name);
+    setPhone(client.phone ?? "");
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    if (saving) return;
+
+    setShowForm(false);
+    setEditingClient(null);
+    setName("");
+    setPhone("");
+  }
+
+  async function saveClient() {
     if (!household?.id || !name.trim()) return;
 
     setSaving(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      if (editingClient) {
+        const { error } = await supabase
+          .from("studio_clients")
+          .update({
+            name: name.trim(),
+            phone: phone.trim() || null,
+          })
+          .eq("id", editingClient.id)
+          .eq("household_id", household.id);
 
-      if (!user) throw new Error("Usuário não autenticado.");
+        if (error) throw error;
+      } else {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
+        if (!user) throw new Error("Usuário não autenticado.");
+
+        const { error } = await supabase
+          .from("studio_clients")
+          .insert({
+            household_id: household.id,
+            created_by: user.id,
+            name: name.trim(),
+            phone: phone.trim() || null,
+          });
+
+        if (error) throw error;
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["studio-clients", household.id],
+      });
+
+      closeForm();
+    } catch (error) {
+      console.error(error);
+      alert(
+        editingClient
+          ? "Não foi possível atualizar a cliente."
+          : "Não foi possível cadastrar a cliente."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteClient(client: Client) {
+    const confirmed = window.confirm(
+      `Excluir a cliente "${client.name}"?`
+    );
+
+    if (!confirmed || !household?.id) return;
+
+    try {
       const { error } = await supabase
         .from("studio_clients")
-        .insert({
-          household_id: household.id,
-          created_by: user.id,
-          name: name.trim(),
-          phone: phone.trim() || null,
-        });
+        .delete()
+        .eq("id", client.id)
+        .eq("household_id", household.id);
 
       if (error) throw error;
-
-      setName("");
-      setPhone("");
-      setShowForm(false);
 
       await queryClient.invalidateQueries({
         queryKey: ["studio-clients", household.id],
       });
     } catch (error) {
       console.error(error);
-      alert("Não foi possível cadastrar a cliente.");
-    } finally {
-      setSaving(false);
+      alert("Não foi possível excluir a cliente.");
     }
   }
 
+  function openWhatsApp(client: Client) {
+    if (!client.phone) {
+      alert("Cadastre o telefone da cliente primeiro.");
+      return;
+    }
+
+    const phone = client.phone.replace(/\D/g, "");
+
+    if (!phone) {
+      alert("O telefone cadastrado é inválido.");
+      return;
+    }
+
+    const message = `Olá, ${client.name}! 💕\n\nAqui é o Studio Lary Andrade.\n\nGostaríamos de confirmar seu atendimento.\n\nPedimos, por favor, que chegue 10 minutos antes do horário agendado.\n\nSerá um prazer receber você! 💕\nStudio Lary Andrade`;
+
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-md px-5 pb-28 pt-6">
-        <header className="mb-7 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/inicio"
-              className="flex size-9 items-center justify-center rounded-full border border-border text-muted-foreground"
-            >
-              <ArrowLeft className="size-4" strokeWidth={1.7} />
-            </Link>
+    <AppShell
+      title="Clientes"
+      subtitle={`${clients.length} ${
+        clients.length === 1 ? "cliente" : "clientes"
+      } cadastradas`}
+      action={
+        <button
+          type="button"
+          onClick={openNewClient}
+          aria-label="Nova cliente"
+          className="flex size-10 items-center justify-center rounded-full bg-[#b7838e] text-white shadow-sm transition-transform active:scale-95"
+        >
+          <Plus className="size-4.5" strokeWidth={1.9} />
+        </button>
+      }
+    >
+      <div className="relative">
+        <Search
+          className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#9b9597]"
+          strokeWidth={1.7}
+        />
 
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Clientes
-              </h1>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar cliente..."
+          className="h-11 w-full rounded-2xl border border-black/[0.06] bg-white pl-11 pr-4 text-sm text-[#211f20] outline-none placeholder:text-[#aaa5a6] focus:border-[#b7838e]/50"
+        />
+      </div>
 
-              <p className="mt-1 text-sm text-muted-foreground">
-                Seus clientes e atendimentos
-              </p>
-            </div>
-          </div>
+      <section className="mt-7">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[#211f20]">
+            Minhas clientes
+          </h2>
 
-          <button
-            type="button"
-            onClick={() => setShowForm((value) => !value)}
-            aria-label="Nova cliente"
-            className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
-          >
-            <Plus className="size-4.5" strokeWidth={2} />
-          </button>
-        </header>
-
-        {showForm && (
-          <section className="surface mb-5 p-5">
-            <h2 className="text-sm font-semibold">
-              Nova cliente
-            </h2>
-
-            <div className="mt-4 space-y-3">
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Nome da cliente"
-                className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none focus:border-income/40"
-              />
-
-              <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="Telefone (opcional)"
-                className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none focus:border-income/40"
-              />
-
-              <button
-                type="button"
-                disabled={saving || !name.trim()}
-                onClick={createClient}
-                className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50"
-              >
-                {saving ? "Salvando..." : "Cadastrar cliente"}
-              </button>
-            </div>
-          </section>
-        )}
-
-        <div className="relative">
-          <Search
-            className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            strokeWidth={1.7}
-          />
-
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar cliente..."
-            className="h-11 w-full rounded-2xl border border-border bg-card pl-11 pr-4 text-sm outline-none focus:border-income/40"
-          />
+          <span className="text-xs text-[#8a8587]">
+            {filteredClients.length}
+          </span>
         </div>
 
-        <section className="mt-7">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">
-              Minhas clientes
-            </h2>
-
-            <span className="text-xs text-muted-foreground">
-              {clients.length} cadastradas
-            </span>
+        {isLoading ? (
+          <div className="rounded-2xl border border-black/[0.05] bg-white px-4 py-7 text-center text-sm text-[#817b7d]">
+            Carregando...
           </div>
-
-          {isLoading ? (
-            <div className="surface px-4 py-6 text-center text-sm text-muted-foreground">
-              Carregando...
-            </div>
-          ) : filteredClients.length === 0 ? (
-            <div className="surface px-5 py-8 text-center">
-              <UserRound className="mx-auto size-6 text-muted-foreground" />
-
-              <p className="mt-3 text-sm font-medium">
-                Nenhuma cliente encontrada
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                Cadastre sua primeira cliente.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredClients.map((client) => (
-                <div
-                  key={client.id}
-                  className="surface flex items-center gap-3 px-4 py-4"
-                >
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-income-soft text-income">
+        ) : filteredClients.length === 0 ? (
+          <EmptyState text="Nenhuma cliente encontrada." />
+        ) : (
+          <div className="space-y-2">
+            {filteredClients.map((client) => (
+              <div
+                key={client.id}
+                className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f3e5e8] text-[#a76f7d]">
                     <UserRound
                       className="size-5"
                       strokeWidth={1.5}
@@ -206,25 +245,121 @@ function ClientesPage() {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">
+                    <p className="truncate text-sm font-semibold text-[#211f20]">
                       {client.name}
                     </p>
 
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-[#817b7d]">
+                      <Phone
+                        className="size-3"
+                        strokeWidth={1.6}
+                      />
                       {client.phone || "Telefone não informado"}
                     </p>
                   </div>
-
-                  <ChevronRight
-                    className="size-4 text-muted-foreground"
-                    strokeWidth={1.6}
-                  />
                 </div>
-              ))}
+
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openWhatsApp(client)}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[#f3e5e8] text-xs font-medium text-[#9d6875]"
+                  >
+                    <MessageCircle
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    WhatsApp
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openEditClient(client)}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] text-xs font-medium text-[#625d5f]"
+                  >
+                    <Pencil
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    Editar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => deleteClient(client)}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-black/[0.06] text-xs font-medium text-[#8d696f]"
+                  >
+                    <Trash2
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 px-4 pb-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-[#211f20]">
+                  {editingClient
+                    ? "Editar cliente"
+                    : "Nova cliente"}
+                </h2>
+
+                <p className="mt-1 text-xs text-[#817b7d]">
+                  Cadastre os dados básicos.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeForm}
+                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d]"
+              >
+                <X className="size-4" strokeWidth={1.7} />
+              </button>
             </div>
-          )}
-        </section>
-      </main>
-    </div>
+
+            <div className="mt-5 space-y-3">
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Nome da cliente"
+                autoFocus
+                className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+              />
+
+              <input
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="WhatsApp / telefone"
+                inputMode="tel"
+                className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
+              />
+
+              <button
+                type="button"
+                disabled={saving || !name.trim()}
+                onClick={saveClient}
+                className="h-11 w-full rounded-xl bg-[#b7838e] text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {saving
+                  ? "Salvando..."
+                  : editingClient
+                    ? "Salvar alterações"
+                    : "Cadastrar cliente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AppShell>
   );
 }
