@@ -41,19 +41,15 @@ function MovimentacoesPage() {
   );
 
   const [filter, setFilter] = useState<
-    "all" | "income" | "expense"
+    "all" | "income" | "expense" | "pending-income" | "pending-expense"
   >("all");
 
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Transaction | null>(
-    null
-  );
+  const [editing, setEditing] = useState<Transaction | null>(null);
 
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState<"income" | "expense">(
-    "income"
-  );
+  const [type, setType] = useState<"income" | "expense">("income");
   const [date, setDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
@@ -84,7 +80,10 @@ function MovimentacoesPage() {
     }
   );
 
-  const { data: transactions = [], isLoading } = useQuery({
+  const {
+    data: transactions = [],
+    isLoading,
+  } = useQuery({
     queryKey: [
       "studio-transactions",
       household?.id,
@@ -101,7 +100,9 @@ function MovimentacoesPage() {
         .eq("household_id", household!.id)
         .gte("date", monthStart)
         .lte("date", monthEnd)
-        .order("date", { ascending: false });
+        .order("date", {
+          ascending: false,
+        });
 
       if (error) throw error;
 
@@ -109,46 +110,113 @@ function MovimentacoesPage() {
     },
   });
 
-  const visibleTransactions = useMemo(() => {
-    if (filter === "all") return transactions;
-
-    return transactions.filter(
-      (transaction) => transaction.type === filter
-    );
-  }, [transactions, filter]);
-
   const totals = useMemo(() => {
-    const income = transactions
-      .filter((item) => item.type === "income")
-      .filter((item) => item.status !== "pending")
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const paidIncome = transactions
+      .filter(
+        (item) =>
+          item.type === "income" &&
+          item.status !== "pending"
+      )
+      .reduce(
+        (sum, item) =>
+          sum + Number(item.amount),
+        0
+      );
 
-    const expense = transactions
-      .filter((item) => item.type === "expense")
-      .filter((item) => item.status !== "pending")
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const paidExpense = transactions
+      .filter(
+        (item) =>
+          item.type === "expense" &&
+          item.status !== "pending"
+      )
+      .reduce(
+        (sum, item) =>
+          sum + Number(item.amount),
+        0
+      );
 
-    const pending = transactions
-      .filter((item) => item.status === "pending")
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const pendingIncome = transactions
+      .filter(
+        (item) =>
+          item.type === "income" &&
+          item.status === "pending"
+      )
+      .reduce(
+        (sum, item) =>
+          sum + Number(item.amount),
+        0
+      );
+
+    const pendingExpense = transactions
+      .filter(
+        (item) =>
+          item.type === "expense" &&
+          item.status === "pending"
+      )
+      .reduce(
+        (sum, item) =>
+          sum + Number(item.amount),
+        0
+      );
 
     return {
-      income,
-      expense,
-      balance: income - expense,
-      pending,
+      paidIncome,
+      paidExpense,
+      pendingIncome,
+      pendingExpense,
+      balance: paidIncome - paidExpense,
     };
   }, [transactions]);
+
+  const visibleTransactions = useMemo(() => {
+    switch (filter) {
+      case "income":
+        return transactions.filter(
+          (item) =>
+            item.type === "income" &&
+            item.status !== "pending"
+        );
+
+      case "expense":
+        return transactions.filter(
+          (item) =>
+            item.type === "expense" &&
+            item.status !== "pending"
+        );
+
+      case "pending-income":
+        return transactions.filter(
+          (item) =>
+            item.type === "income" &&
+            item.status === "pending"
+        );
+
+      case "pending-expense":
+        return transactions.filter(
+          (item) =>
+            item.type === "expense" &&
+            item.status === "pending"
+        );
+
+      default:
+        return transactions;
+    }
+  }, [transactions, filter]);
 
   function formatMoney(value: number) {
     return value.toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     });
   }
 
   function parseMoney(value: string) {
     return (
-      Number(value.replace(/\./g, "").replace(",", ".")) || 0
+      Number(
+        value
+          .replace(/\./g, "")
+          .replace(",", ".")
+      ) || 0
     );
   }
 
@@ -177,18 +245,33 @@ function MovimentacoesPage() {
     setDescription("");
     setAmount("");
     setType("income");
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(
+      new Date()
+        .toISOString()
+        .slice(0, 10)
+    );
     setStatus("paid");
     setShowForm(true);
   }
 
-  function openEdit(transaction: Transaction) {
+  function openEdit(
+    transaction: Transaction
+  ) {
     setEditing(transaction);
-    setDescription(transaction.description);
-    setAmount(formatMoney(Number(transaction.amount)));
+    setDescription(
+      transaction.description
+    );
+    setAmount(
+      formatMoney(
+        Number(transaction.amount)
+      )
+    );
     setType(transaction.type);
     setDate(transaction.date);
-    setStatus(transaction.status || "paid");
+    setStatus(
+      transaction.status ||
+        "paid"
+    );
     setShowForm(true);
   }
 
@@ -206,7 +289,9 @@ function MovimentacoesPage() {
       !amount ||
       !date
     ) {
-      alert("Preencha descrição, valor e data da movimentação.");
+      alert(
+        "Preencha descrição, valor e data da movimentação."
+      );
       return;
     }
 
@@ -217,10 +302,15 @@ function MovimentacoesPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) throw new Error("Usuário não autenticado.");
+      if (!user) {
+        throw new Error(
+          "Usuário não autenticado."
+        );
+      }
 
       const payload = {
-        description: description.trim(),
+        description:
+          description.trim(),
         amount: parseMoney(amount),
         type,
         date,
@@ -228,39 +318,59 @@ function MovimentacoesPage() {
       };
 
       if (editing) {
-        const { error } = await supabase
-          .from("transactions")
-          .update(payload)
-          .eq("id", editing.id)
-          .eq("household_id", household.id);
+        const { error } =
+          await supabase
+            .from("transactions")
+            .update(payload)
+            .eq(
+              "id",
+              editing.id
+            )
+            .eq(
+              "household_id",
+              household.id
+            );
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("transactions")
-          .insert({
-            household_id: household.id,
-            user_id: user.id,
-            ...payload,
-          });
+        const { error } =
+          await supabase
+            .from("transactions")
+            .insert({
+              household_id:
+                household.id,
+              user_id: user.id,
+              ...payload,
+            });
 
         if (error) throw error;
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ["studio-transactions"],
-      });
+      await queryClient.invalidateQueries(
+        {
+          queryKey: [
+            "studio-transactions",
+          ],
+        }
+      );
 
       closeForm();
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Não foi possível salvar a movimentação.");
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a movimentação."
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteTransaction(transaction: Transaction) {
+  async function deleteTransaction(
+    transaction: Transaction
+  ) {
     if (
       !window.confirm(
         `Excluir "${transaction.description}"?`
@@ -271,63 +381,105 @@ function MovimentacoesPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("id", transaction.id)
-        .eq("household_id", household.id);
+      const { error } =
+        await supabase
+          .from("transactions")
+          .delete()
+          .eq(
+            "id",
+            transaction.id
+          )
+          .eq(
+            "household_id",
+            household.id
+          );
 
       if (error) throw error;
 
-      await queryClient.invalidateQueries({
-        queryKey: ["studio-transactions"],
-      });
+      await queryClient.invalidateQueries(
+        {
+          queryKey: [
+            "studio-transactions",
+          ],
+        }
+      );
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Não foi possível excluir a movimentação.");
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir a movimentação."
+      );
     }
   }
 
-  async function markAsPaid(transaction: Transaction) {
+  async function markAsPaid(
+    transaction: Transaction
+  ) {
     if (!household?.id) return;
 
     try {
-      const { error } = await supabase
-        .from("transactions")
-        .update({ status: "paid" })
-        .eq("id", transaction.id)
-        .eq("household_id", household.id);
+      const { error } =
+        await supabase
+          .from("transactions")
+          .update({
+            status: "paid",
+          })
+          .eq(
+            "id",
+            transaction.id
+          )
+          .eq(
+            "household_id",
+            household.id
+          );
 
       if (error) throw error;
 
-      await queryClient.invalidateQueries({
-        queryKey: ["studio-transactions"],
-      });
+      await queryClient.invalidateQueries(
+        {
+          queryKey: [
+            "studio-transactions",
+          ],
+        }
+      );
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Não foi possível atualizar o pagamento.");
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o pagamento."
+      );
     }
   }
 
   return (
     <AppShell
       title="Financeiro"
-      subtitle="Entradas, gastos e recebimentos"
+      subtitle="Entradas, gastos e pendências"
       action={
         <button
           type="button"
           onClick={openNew}
           className="flex size-10 items-center justify-center rounded-full bg-[#b7838e] text-white shadow-sm active:scale-95"
+          aria-label="Nova movimentação"
         >
-          <Plus className="size-4.5" strokeWidth={1.9} />
+          <Plus
+            className="size-4.5"
+            strokeWidth={1.9}
+          />
         </button>
       }
     >
+      {/* MÊS */}
       <div className="flex items-center justify-between rounded-2xl border border-black/[0.05] bg-white px-3 py-2 shadow-sm">
         <button
           type="button"
           onClick={previousMonth}
           className="flex size-9 items-center justify-center rounded-full text-[#817b7d]"
+          aria-label="Mês anterior"
         >
           ‹
         </button>
@@ -340,197 +492,341 @@ function MovimentacoesPage() {
           type="button"
           onClick={nextMonth}
           className="flex size-9 items-center justify-center rounded-full text-[#817b7d]"
+          aria-label="Próximo mês"
         >
           ›
         </button>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        <div className="rounded-2xl bg-[#f3e5e8] p-4">
-          <p className="text-xs text-[#8d6871]">Recebido</p>
-          <p className="mt-1 text-lg font-semibold text-[#211f20]">
-            R$ {formatMoney(totals.income)}
-          </p>
+      {/* RESUMO */}
+      <div className="mt-5 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-2xl bg-[#f3e5e8] p-4">
+            <p className="text-xs text-[#8d6871]">
+              Entradas recebidas
+            </p>
+
+            <p className="mt-1 text-lg font-semibold text-[#211f20]">
+              R${" "}
+              {formatMoney(
+                totals.paidIncome
+              )}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
+            <p className="text-xs text-[#817b7d]">
+              Gastos pagos
+            </p>
+
+            <p className="mt-1 text-lg font-semibold text-[#211f20]">
+              R${" "}
+              {formatMoney(
+                totals.paidExpense
+              )}
+            </p>
+          </div>
         </div>
 
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
-          <p className="text-xs text-[#817b7d]">Gastos</p>
-          <p className="mt-1 text-lg font-semibold text-[#211f20]">
-            R$ {formatMoney(totals.expense)}
-          </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setFilter(
+                "pending-income"
+              )
+            }
+            className="rounded-2xl bg-[#f8eef0] p-4 text-left"
+          >
+            <p className="text-xs text-[#8d6871]">
+              Entradas pendentes
+            </p>
+
+            <p className="mt-1 text-lg font-semibold text-[#211f20]">
+              R${" "}
+              {formatMoney(
+                totals.pendingIncome
+              )}
+            </p>
+
+            <p className="mt-1 text-[10px] text-[#9d6875]">
+              A receber
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              setFilter(
+                "pending-expense"
+              )
+            }
+            className="rounded-2xl bg-[#f5f3f2] p-4 text-left"
+          >
+            <p className="text-xs text-[#817b7d]">
+              Gastos pendentes
+            </p>
+
+            <p className="mt-1 text-lg font-semibold text-[#211f20]">
+              R${" "}
+              {formatMoney(
+                totals.pendingExpense
+              )}
+            </p>
+
+            <p className="mt-1 text-[10px] text-[#817b7d]">
+              A pagar
+            </p>
+          </button>
         </div>
 
-        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
-          <p className="text-xs text-[#817b7d]">Saldo</p>
-          <p className="mt-1 text-lg font-semibold text-[#211f20]">
-            R$ {formatMoney(totals.balance)}
+        <div className="rounded-2xl border border-black/[0.05] bg-white p-4">
+          <p className="text-xs text-[#817b7d]">
+            Saldo disponível
           </p>
-        </div>
 
-        <div className="rounded-2xl bg-[#f8eef0] p-4">
-          <p className="text-xs text-[#8d6871]">
-            A receber / pendente
-          </p>
-          <p className="mt-1 text-lg font-semibold text-[#211f20]">
-            R$ {formatMoney(totals.pending)}
+          <p className="mt-1 text-xl font-semibold text-[#211f20]">
+            R${" "}
+            {formatMoney(
+              totals.balance
+            )}
           </p>
         </div>
       </div>
 
-      <div className="mt-6 flex gap-2 overflow-x-auto">
+      {/* FILTROS */}
+      <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
         {[
           ["all", "Todos"],
           ["income", "Entradas"],
           ["expense", "Gastos"],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() =>
-              setFilter(value as "all" | "income" | "expense")
-            }
-            className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium ${
-              filter === value
-                ? "bg-[#b7838e] text-white"
-                : "bg-white text-[#817b7d] ring-1 ring-black/[0.05]"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+          [
+            "pending-income",
+            "A receber",
+          ],
+          [
+            "pending-expense",
+            "A pagar",
+          ],
+        ].map(
+          ([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                setFilter(
+                  value as
+                    | "all"
+                    | "income"
+                    | "expense"
+                    | "pending-income"
+                    | "pending-expense"
+                )
+              }
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium ${
+                filter === value
+                  ? "bg-[#b7838e] text-white"
+                  : "bg-white text-[#817b7d] ring-1 ring-black/[0.05]"
+              }`}
+            >
+              {label}
+            </button>
+          )
+        )}
       </div>
 
+      {/* LISTA */}
       <section className="mt-6">
         {isLoading ? (
           <div className="rounded-2xl bg-white px-4 py-8 text-center text-sm text-[#817b7d]">
             Carregando...
           </div>
-        ) : visibleTransactions.length === 0 ? (
-          <EmptyState text="Nenhuma movimentação neste mês." />
+        ) : visibleTransactions.length ===
+          0 ? (
+          <EmptyState
+            text={
+              filter ===
+              "pending-income"
+                ? "Nenhuma entrada pendente."
+                : filter ===
+                    "pending-expense"
+                  ? "Nenhum gasto pendente."
+                  : "Nenhuma movimentação neste mês."
+            }
+          />
         ) : (
           <div className="space-y-2">
-            {visibleTransactions.map((transaction) => {
-              const isIncome = transaction.type === "income";
-              const isPending =
-                transaction.status === "pending";
+            {visibleTransactions.map(
+              (transaction) => {
+                const isIncome =
+                  transaction.type ===
+                  "income";
 
-              return (
-                <div
-                  key={transaction.id}
-                  className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
-                        isIncome
-                          ? "bg-[#f3e5e8] text-[#9d6875]"
-                          : "bg-[#f5f3f2] text-[#625d5f]"
-                      }`}
-                    >
-                      {isIncome ? (
-                        <ArrowUpCircle
-                          className="size-5"
-                          strokeWidth={1.6}
-                        />
-                      ) : (
-                        <ArrowDownCircle
-                          className="size-5"
-                          strokeWidth={1.6}
-                        />
-                      )}
+                const isPending =
+                  transaction.status ===
+                  "pending";
+
+                return (
+                  <div
+                    key={
+                      transaction.id
+                    }
+                    className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                          isIncome
+                            ? "bg-[#f3e5e8] text-[#9d6875]"
+                            : "bg-[#f5f3f2] text-[#625d5f]"
+                        }`}
+                      >
+                        {isIncome ? (
+                          <ArrowUpCircle
+                            className="size-5"
+                            strokeWidth={
+                              1.6
+                            }
+                          />
+                        ) : (
+                          <ArrowDownCircle
+                            className="size-5"
+                            strokeWidth={
+                              1.6
+                            }
+                          />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[#211f20]">
+                          {
+                            transaction.description
+                          }
+                        </p>
+
+                        <p className="mt-1 text-xs text-[#817b7d]">
+                          {new Date(
+                            `${transaction.date}T12:00:00`
+                          ).toLocaleDateString(
+                            "pt-BR"
+                          )}
+
+                          {transaction.category
+                            ? ` · ${transaction.category}`
+                            : ""}
+                        </p>
+                      </div>
+
+                      <p
+                        className={`shrink-0 text-sm font-semibold ${
+                          isIncome
+                            ? "text-[#9d6875]"
+                            : "text-[#211f20]"
+                        }`}
+                      >
+                        {isIncome
+                          ? "+"
+                          : "-"}{" "}
+                        R${" "}
+                        {formatMoney(
+                          Number(
+                            transaction.amount
+                          )
+                        )}
+                      </p>
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-[#211f20]">
-                        {transaction.description}
-                      </p>
+                    <div className="mt-3 flex items-center justify-between border-t border-black/[0.05] pt-3">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
+                          isPending
+                            ? isIncome
+                              ? "bg-[#f8eef0] text-[#9d6875]"
+                              : "bg-[#f5f3f2] text-[#625d5f]"
+                            : "bg-[#edf5ef] text-[#64816b]"
+                        }`}
+                      >
+                        {isPending
+                          ? isIncome
+                            ? "A receber"
+                            : "A pagar"
+                          : isIncome
+                            ? "Recebido"
+                            : "Pago"}
+                      </span>
 
-                      <p className="mt-1 text-xs text-[#817b7d]">
-                        {new Date(
-                          `${transaction.date}T12:00:00`
-                        ).toLocaleDateString("pt-BR")}
-                        {transaction.category
-                          ? ` · ${transaction.category}`
-                          : ""}
-                      </p>
-                    </div>
+                      <div className="flex gap-2">
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              markAsPaid(
+                                transaction
+                              )
+                            }
+                            className="flex size-8 items-center justify-center rounded-lg bg-[#edf5ef] text-[#64816b]"
+                            aria-label={
+                              isIncome
+                                ? "Marcar como recebido"
+                                : "Marcar como pago"
+                            }
+                          >
+                            <Check
+                              className="size-4"
+                              strokeWidth={
+                                1.8
+                              }
+                            />
+                          </button>
+                        )}
 
-                    <p
-                      className={`shrink-0 text-sm font-semibold ${
-                        isIncome
-                          ? "text-[#9d6875]"
-                          : "text-[#211f20]"
-                      }`}
-                    >
-                      {isIncome ? "+" : "-"} R${" "}
-                      {formatMoney(Number(transaction.amount))}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between border-t border-black/[0.05] pt-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
-                        isPending
-                          ? "bg-[#f8eee0] text-[#9a7654]"
-                          : "bg-[#edf5ef] text-[#64816b]"
-                      }`}
-                    >
-                      {isPending ? "A receber" : "Pago"}
-                    </span>
-
-                    <div className="flex gap-2">
-                      {isPending && (
                         <button
                           type="button"
                           onClick={() =>
-                            markAsPaid(transaction)
+                            openEdit(
+                              transaction
+                            )
                           }
-                          className="flex size-8 items-center justify-center rounded-lg bg-[#edf5ef] text-[#64816b]"
-                          aria-label="Marcar como pago"
+                          className="flex size-8 items-center justify-center rounded-lg bg-[#f6f3f3] text-[#625d5f]"
+                          aria-label="Editar"
                         >
-                          <Check
-                            className="size-4"
-                            strokeWidth={1.8}
+                          <Pencil
+                            className="size-3.5"
+                            strokeWidth={
+                              1.7
+                            }
                           />
                         </button>
-                      )}
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openEdit(transaction)
-                        }
-                        className="flex size-8 items-center justify-center rounded-lg bg-[#f6f3f3] text-[#625d5f]"
-                        aria-label="Editar"
-                      >
-                        <Pencil
-                          className="size-3.5"
-                          strokeWidth={1.7}
-                        />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          deleteTransaction(transaction)
-                        }
-                        className="flex size-8 items-center justify-center rounded-lg bg-[#f6f3f3] text-[#8d696f]"
-                        aria-label="Excluir"
-                      >
-                        <Trash2
-                          className="size-3.5"
-                          strokeWidth={1.7}
-                        />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteTransaction(
+                              transaction
+                            )
+                          }
+                          className="flex size-8 items-center justify-center rounded-lg bg-[#f6f3f3] text-[#8d696f]"
+                          aria-label="Excluir"
+                        >
+                          <Trash2
+                            className="size-3.5"
+                            strokeWidth={
+                              1.7
+                            }
+                          />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         )}
       </section>
 
+      {/* FORMULÁRIO */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 px-4 pb-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
@@ -550,19 +846,38 @@ function MovimentacoesPage() {
               <button
                 type="button"
                 onClick={closeForm}
-                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d]"
+                disabled={saving}
+                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d] disabled:opacity-50"
               >
-                <X className="size-4" strokeWidth={1.7} />
+                <X
+                  className="size-4"
+                  strokeWidth={1.7}
+                />
               </button>
             </div>
 
             <div className="mt-5 space-y-3">
+              {/* TIPO */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setType("income")}
+                  onClick={() => {
+                    setType(
+                      "income"
+                    );
+
+                    if (
+                      status ===
+                      "pending"
+                    ) {
+                      setStatus(
+                        "pending"
+                      );
+                    }
+                  }}
                   className={`h-10 rounded-xl text-sm font-medium ${
-                    type === "income"
+                    type ===
+                    "income"
                       ? "bg-[#f3e5e8] text-[#9d6875]"
                       : "bg-[#faf9f8] text-[#817b7d]"
                   }`}
@@ -572,9 +887,23 @@ function MovimentacoesPage() {
 
                 <button
                   type="button"
-                  onClick={() => setType("expense")}
+                  onClick={() => {
+                    setType(
+                      "expense"
+                    );
+
+                    if (
+                      status ===
+                      "pending"
+                    ) {
+                      setStatus(
+                        "pending"
+                      );
+                    }
+                  }}
                   className={`h-10 rounded-xl text-sm font-medium ${
-                    type === "expense"
+                    type ===
+                    "expense"
                       ? "bg-[#ece9e7] text-[#625d5f]"
                       : "bg-[#faf9f8] text-[#817b7d]"
                   }`}
@@ -584,9 +913,16 @@ function MovimentacoesPage() {
               </div>
 
               <input
-                value={description}
-                onChange={(event) =>
-                  setDescription(event.target.value)
+                value={
+                  description
+                }
+                onChange={(
+                  event
+                ) =>
+                  setDescription(
+                    event.target
+                      .value
+                  )
                 }
                 placeholder="Descrição"
                 autoFocus
@@ -595,8 +931,13 @@ function MovimentacoesPage() {
 
               <input
                 value={amount}
-                onChange={(event) =>
-                  setAmount(event.target.value)
+                onChange={(
+                  event
+                ) =>
+                  setAmount(
+                    event.target
+                      .value
+                  )
                 }
                 placeholder="Valor"
                 inputMode="decimal"
@@ -606,21 +947,43 @@ function MovimentacoesPage() {
               <input
                 type="date"
                 value={date}
-                onChange={(event) =>
-                  setDate(event.target.value)
+                onChange={(
+                  event
+                ) =>
+                  setDate(
+                    event.target
+                      .value
+                  )
                 }
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
               />
 
+              {/* STATUS */}
               <select
                 value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value)
+                onChange={(
+                  event
+                ) =>
+                  setStatus(
+                    event.target
+                      .value
+                  )
                 }
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
               >
-                <option value="paid">Pago / Recebido</option>
-                <option value="pending">A receber / Pendente</option>
+                <option value="paid">
+                  {type ===
+                  "income"
+                    ? "Recebido"
+                    : "Pago"}
+                </option>
+
+                <option value="pending">
+                  {type ===
+                  "income"
+                    ? "A receber"
+                    : "A pagar"}
+                </option>
               </select>
 
               <button
@@ -631,7 +994,9 @@ function MovimentacoesPage() {
                   !amount ||
                   !date
                 }
-                onClick={saveTransaction}
+                onClick={
+                  saveTransaction
+                }
                 className="h-11 w-full rounded-xl bg-[#b7838e] text-sm font-semibold text-white disabled:opacity-50"
               >
                 {saving
