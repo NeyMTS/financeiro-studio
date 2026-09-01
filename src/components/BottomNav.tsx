@@ -3,14 +3,14 @@ import {
   Home,
   CalendarDays,
   CircleDollarSign,
-  MoreHorizontal,
+  UsersRound,
 } from "lucide-react";
 
 const items = [
   { to: "/inicio", label: "Início", icon: Home },
-  { to: "/movimentacoes", label: "Financeiro", icon: CircleDollarSign },
-  { to: "/contas", label: "Agenda", icon: CalendarDays },
-  { to: "/metas", label: "Mais", icon: MoreHorizontal },
+  { to: "/a-receber", label: "A receber", icon: CircleDollarSign },
+  { to: "/clientes", label: "Clientes", icon: UsersRound },
+  { to: "/servicos", label: "Serviços", icon: CalendarDays },
 ] as const;
 
 export function BottomNav() {
