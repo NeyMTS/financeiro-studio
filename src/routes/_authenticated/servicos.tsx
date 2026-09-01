@@ -32,13 +32,12 @@ const icons = {
   outros: MoreHorizontal,
 };
 
-const categories = [
+const DEFAULT_CATEGORIES = [
   "Cílios",
   "Maquiagem",
   "Sobrancelhas",
   "Unhas",
   "Cabelo",
-  "Outros",
 ];
 
 type Service = {
@@ -60,13 +59,15 @@ function getMetadataKey(householdId: string) {
   return `studio-services-metadata-${householdId}`;
 }
 
+function getCategoriesKey(householdId: string) {
+  return `studio-service-categories-${householdId}`;
+}
+
 function loadMetadata(householdId?: string): ServiceMetadata {
   if (!householdId || typeof window === "undefined") return {};
 
   try {
-    const saved = localStorage.getItem(
-      getMetadataKey(householdId)
-    );
+    const saved = localStorage.getItem(getMetadataKey(householdId));
 
     if (!saved) return {};
 
@@ -85,6 +86,47 @@ function saveMetadata(
   localStorage.setItem(
     getMetadataKey(householdId),
     JSON.stringify(metadata)
+  );
+}
+
+function loadCategories(householdId?: string): string[] {
+  if (!householdId || typeof window === "undefined") {
+    return DEFAULT_CATEGORIES;
+  }
+
+  try {
+    const saved = localStorage.getItem(
+      getCategoriesKey(householdId)
+    );
+
+    if (!saved) {
+      return DEFAULT_CATEGORIES;
+    }
+
+    const parsed = JSON.parse(saved);
+
+    if (!Array.isArray(parsed)) {
+      return DEFAULT_CATEGORIES;
+    }
+
+    return parsed.filter(
+      (item): item is string =>
+        typeof item === "string" && item.trim().length > 0
+    );
+  } catch {
+    return DEFAULT_CATEGORIES;
+  }
+}
+
+function saveCategories(
+  householdId: string,
+  categories: string[]
+) {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(
+    getCategoriesKey(householdId),
+    JSON.stringify(categories)
   );
 }
 
@@ -115,12 +157,22 @@ function ServicosPage() {
   const [editingService, setEditingService] =
     useState<Service | null>(null);
 
+  const [showCategoryForm, setShowCategoryForm] =
+    useState(false);
+
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [icon, setIcon] = useState("sparkles");
 
-  const [category, setCategory] = useState("Cílios");
+  const [category, setCategory] = useState("");
+
   const [duration, setDuration] = useState("60");
+
+  const [newCategory, setNewCategory] =
+    useState("");
+
+  const [categories, setCategories] =
+    useState<string[]>(DEFAULT_CATEGORIES);
 
   const [metadata, setMetadata] =
     useState<ServiceMetadata>({});
@@ -131,6 +183,7 @@ function ServicosPage() {
     if (!household?.id) return;
 
     setMetadata(loadMetadata(household.id));
+    setCategories(loadCategories(household.id));
   }, [household?.id]);
 
   const { data: services = [], isLoading } = useQuery({
@@ -170,7 +223,7 @@ function ServicosPage() {
   function getServiceMetadata(service: Service) {
     return (
       metadata[service.id] ?? {
-        category: "Outros",
+        category: "Sem categoria",
         duration_minutes: 60,
       }
     );
@@ -181,7 +234,7 @@ function ServicosPage() {
     setName("");
     setPrice("");
     setIcon("sparkles");
-    setCategory("Cílios");
+    setCategory(categories[0] ?? "");
     setDuration("60");
     setShowForm(true);
   }
@@ -210,8 +263,103 @@ function ServicosPage() {
     setName("");
     setPrice("");
     setIcon("sparkles");
-    setCategory("Cílios");
+    setCategory(categories[0] ?? "");
     setDuration("60");
+  }
+
+  function openCategoryForm() {
+    setNewCategory("");
+    setShowCategoryForm(true);
+  }
+
+  function closeCategoryForm() {
+    setShowCategoryForm(false);
+    setNewCategory("");
+  }
+
+  function createCategory() {
+    if (!household?.id) return;
+
+    const trimmed = newCategory.trim();
+
+    if (!trimmed) {
+      alert("Digite o nome da categoria.");
+      return;
+    }
+
+    const alreadyExists = categories.some(
+      (item) =>
+        item.toLowerCase() ===
+        trimmed.toLowerCase()
+    );
+
+    if (alreadyExists) {
+      alert("Essa categoria já existe.");
+      return;
+    }
+
+    const nextCategories = [
+      ...categories,
+      trimmed,
+    ];
+
+    setCategories(nextCategories);
+
+    saveCategories(
+      household.id,
+      nextCategories
+    );
+
+    setCategory(trimmed);
+
+    closeCategoryForm();
+  }
+
+  function deleteCategory(
+    categoryToDelete: string
+  ) {
+    if (!household?.id) return;
+
+    const servicesUsingCategory =
+      services.filter(
+        (service) =>
+          getServiceMetadata(service).category ===
+          categoryToDelete
+      );
+
+    if (servicesUsingCategory.length > 0) {
+      alert(
+        `Não é possível excluir "${categoryToDelete}" porque existem serviços vinculados a ela. Edite esses serviços primeiro.`
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Excluir a categoria "${categoryToDelete}"?`
+      )
+    ) {
+      return;
+    }
+
+    const nextCategories =
+      categories.filter(
+        (item) =>
+          item !== categoryToDelete
+      );
+
+    setCategories(nextCategories);
+
+    saveCategories(
+      household.id,
+      nextCategories
+    );
+
+    if (category === categoryToDelete) {
+      setCategory(
+        nextCategories[0] ?? ""
+      );
+    }
   }
 
   async function saveService() {
@@ -286,12 +434,15 @@ function ServicosPage() {
         const nextMetadata = {
           ...metadata,
           [serviceId]: {
-            category,
+            category:
+              category.trim() ||
+              "Sem categoria",
             duration_minutes: durationMinutes,
           },
         };
 
         setMetadata(nextMetadata);
+
         saveMetadata(
           household.id,
           nextMetadata
@@ -319,7 +470,9 @@ function ServicosPage() {
     }
   }
 
-  async function deleteService(service: Service) {
+  async function deleteService(
+    service: Service
+  ) {
     const confirmed = window.confirm(
       `Excluir o serviço "${service.name}"?`
     );
@@ -392,7 +545,7 @@ function ServicosPage() {
     });
 
     return groups;
-  }, [services, metadata]);
+  }, [services, metadata, categories]);
 
   return (
     <AppShell
@@ -424,9 +577,23 @@ function ServicosPage() {
             </p>
           </div>
 
-          <span className="text-xs text-[#817b7d]">
-            {services.length} cadastrados
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openCategoryForm}
+              className="flex items-center gap-1.5 rounded-xl bg-[#f3e5e8] px-3 py-2 text-xs font-medium text-[#9d6875]"
+            >
+              <Plus
+                className="size-3.5"
+                strokeWidth={1.8}
+              />
+              Categoria
+            </button>
+
+            <span className="text-xs text-[#817b7d]">
+              {services.length} cadastrados
+            </span>
+          </div>
         </div>
 
         {isLoading ? (
@@ -451,13 +618,8 @@ function ServicosPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {categories.map(
-              (categoryName) => {
-                const categoryServices =
-                  groupedServices[
-                    categoryName
-                  ] ?? [];
-
+            {Object.entries(groupedServices).map(
+              ([categoryName, categoryServices]) => {
                 if (
                   categoryServices.length === 0
                 ) {
@@ -474,6 +636,22 @@ function ServicosPage() {
                       <h3 className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9d6875]">
                         {categoryName}
                       </h3>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteCategory(
+                            categoryName
+                          )
+                        }
+                        className="flex size-5 items-center justify-center rounded-full text-[#aaa5a6] hover:bg-[#f3e5e8] hover:text-[#9d6875]"
+                        aria-label={`Excluir categoria ${categoryName}`}
+                      >
+                        <X
+                          className="size-3"
+                          strokeWidth={1.7}
+                        />
+                      </button>
 
                       <div className="h-px flex-1 bg-black/[0.06]" />
                     </div>
@@ -591,6 +769,105 @@ function ServicosPage() {
         )}
       </section>
 
+      {/* MODAL DE CATEGORIA */}
+      {showCategoryForm && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/25 px-4 pb-4 sm:items-center">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#aaa5a6]">
+                  Serviços
+                </p>
+
+                <h2 className="mt-1 text-base font-semibold text-[#211f20]">
+                  Nova categoria
+                </h2>
+
+                <p className="mt-1 text-xs text-[#817b7d]">
+                  Crie uma categoria para
+                  organizar seus serviços.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeCategoryForm}
+                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d]"
+                aria-label="Fechar"
+              >
+                <X
+                  className="size-4"
+                  strokeWidth={1.7}
+                />
+              </button>
+            </div>
+
+            <input
+              autoFocus
+              value={newCategory}
+              onChange={(event) =>
+                setNewCategory(
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  createCategory();
+                }
+              }}
+              placeholder="Ex.: Depilação"
+              className="mt-5 h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]"
+            />
+
+            <button
+              type="button"
+              onClick={createCategory}
+              className="mt-3 h-11 w-full rounded-xl bg-[#b7838e] text-sm font-semibold text-white"
+            >
+              Criar categoria
+            </button>
+
+            <div className="mt-5 border-t border-black/[0.05] pt-4">
+              <p className="mb-3 text-xs font-medium text-[#625d5f]">
+                Categorias atuais
+              </p>
+
+              <div className="space-y-2">
+                {categories.map(
+                  (item) => (
+                    <div
+                      key={item}
+                      className="flex items-center justify-between rounded-xl bg-[#faf9f8] px-3 py-2.5"
+                    >
+                      <span className="text-xs text-[#211f20]">
+                        {item}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteCategory(
+                            item
+                          )
+                        }
+                        className="flex size-7 items-center justify-center rounded-lg text-[#aaa5a6] hover:bg-[#f3e5e8] hover:text-[#9d6875]"
+                        aria-label={`Excluir ${item}`}
+                      >
+                        <Trash2
+                          className="size-3.5"
+                          strokeWidth={1.7}
+                        />
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE SERVIÇO */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 px-4 pb-4 sm:items-center">
           <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
@@ -647,9 +924,23 @@ function ServicosPage() {
 
               {/* CATEGORIA */}
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Categoria
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-xs font-medium text-[#625d5f]">
+                    Categoria
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={openCategoryForm}
+                    className="flex items-center gap-1 text-[10px] font-medium text-[#9d6875]"
+                  >
+                    <Plus
+                      className="size-3"
+                      strokeWidth={1.8}
+                    />
+                    Nova categoria
+                  </button>
+                </div>
 
                 <select
                   value={category}
@@ -660,14 +951,20 @@ function ServicosPage() {
                   }
                   className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm text-[#211f20] outline-none focus:border-[#b7838e]/50"
                 >
-                  {categories.map(
-                    (item) => (
-                      <option
-                        key={item}
-                        value={item}
-                      >
-                        {item}
-                      </option>
+                  {categories.length === 0 ? (
+                    <option value="">
+                      Sem categoria
+                    </option>
+                  ) : (
+                    categories.map(
+                      (item) => (
+                        <option
+                          key={item}
+                          value={item}
+                        >
+                          {item}
+                        </option>
+                      )
                     )
                   )}
                 </select>
@@ -824,7 +1121,8 @@ function ServicosPage() {
                   </span>
 
                   <strong className="text-xs text-[#9d6875]">
-                    {category}
+                    {category ||
+                      "Sem categoria"}
                   </strong>
                 </div>
 
