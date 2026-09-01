@@ -16,21 +16,25 @@ export function AppShell({
 }) {
   return (
     <div className="min-h-screen bg-[#faf9f8] text-[#211f20]">
-      <div className="mx-auto min-h-screen max-w-md px-5 pb-28 pt-6">
+      <div className="mx-auto min-h-screen w-full max-w-md px-5 pb-32 pt-5">
         {topContent ? (
-          <div className="mb-6">
+          <div className="mb-5">
             {topContent}
           </div>
         ) : null}
 
-        <header className="mb-7 flex items-start justify-between gap-4">
+        <header className="mb-6 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-[#211f20]">
+            <p className="mb-1 text-[9px] font-medium uppercase tracking-[0.24em] text-[#aaa5a6]">
+              STUDIO DA LARY
+            </p>
+
+            <h1 className="truncate text-[25px] font-semibold leading-tight tracking-[-0.02em] text-[#211f20]">
               {title}
             </h1>
 
             {subtitle ? (
-              <p className="mt-1 text-sm text-[#817b7d]">
+              <p className="mt-1 text-xs text-[#817b7d]">
                 {subtitle}
               </p>
             ) : null}
@@ -43,9 +47,7 @@ export function AppShell({
           ) : null}
         </header>
 
-        <div className="pb-4">
-          {children}
-        </div>
+        <main className="pb-4">{children}</main>
       </div>
 
       <BottomNav />
