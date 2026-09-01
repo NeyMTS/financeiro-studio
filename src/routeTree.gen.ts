@@ -12,10 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedAReceberRouteImport } from './routes/_authenticated/a-receber'
+import { Route as AuthenticatedAgendaRouteImport } from './routes/_authenticated/agenda'
+import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedContasRouteImport } from './routes/_authenticated/contas'
 import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated/inicio'
 import { Route as AuthenticatedMetasRouteImport } from './routes/_authenticated/metas'
 import { Route as AuthenticatedMovimentacoesRouteImport } from './routes/_authenticated/movimentacoes'
+import { Route as AuthenticatedServicosRouteImport } from './routes/_authenticated/servicos'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,6 +34,21 @@ const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAReceberRoute = AuthenticatedAReceberRouteImport.update({
+  id: '/a-receber',
+  path: '/a-receber',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAgendaRoute = AuthenticatedAgendaRouteImport.update({
+  id: '/agenda',
+  path: '/agenda',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedClientesRoute = AuthenticatedClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedContasRoute = AuthenticatedContasRouteImport.update({
   id: '/contas',
@@ -52,47 +71,88 @@ const AuthenticatedMovimentacoesRoute =
     path: '/movimentacoes',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedServicosRoute = AuthenticatedServicosRouteImport.update({
+  id: '/servicos',
+  path: '/servicos',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/a-receber': typeof AuthenticatedAReceberRoute
+  '/agenda': typeof AuthenticatedAgendaRoute
+  '/clientes': typeof AuthenticatedClientesRoute
   '/contas': typeof AuthenticatedContasRoute
   '/inicio': typeof AuthenticatedInicioRoute
   '/metas': typeof AuthenticatedMetasRoute
   '/movimentacoes': typeof AuthenticatedMovimentacoesRoute
+  '/servicos': typeof AuthenticatedServicosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/a-receber': typeof AuthenticatedAReceberRoute
+  '/agenda': typeof AuthenticatedAgendaRoute
+  '/clientes': typeof AuthenticatedClientesRoute
   '/contas': typeof AuthenticatedContasRoute
   '/inicio': typeof AuthenticatedInicioRoute
   '/metas': typeof AuthenticatedMetasRoute
   '/movimentacoes': typeof AuthenticatedMovimentacoesRoute
+  '/servicos': typeof AuthenticatedServicosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/a-receber': typeof AuthenticatedAReceberRoute
+  '/_authenticated/agenda': typeof AuthenticatedAgendaRoute
+  '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/contas': typeof AuthenticatedContasRoute
   '/_authenticated/inicio': typeof AuthenticatedInicioRoute
   '/_authenticated/metas': typeof AuthenticatedMetasRoute
   '/_authenticated/movimentacoes': typeof AuthenticatedMovimentacoesRoute
+  '/_authenticated/servicos': typeof AuthenticatedServicosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/contas' | '/inicio' | '/metas' | '/movimentacoes'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/a-receber'
+    | '/agenda'
+    | '/clientes'
+    | '/contas'
+    | '/inicio'
+    | '/metas'
+    | '/movimentacoes'
+    | '/servicos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/contas' | '/inicio' | '/metas' | '/movimentacoes'
+  to:
+    | '/'
+    | '/auth'
+    | '/a-receber'
+    | '/agenda'
+    | '/clientes'
+    | '/contas'
+    | '/inicio'
+    | '/metas'
+    | '/movimentacoes'
+    | '/servicos'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/a-receber'
+    | '/_authenticated/agenda'
+    | '/_authenticated/clientes'
     | '/_authenticated/contas'
     | '/_authenticated/inicio'
     | '/_authenticated/metas'
     | '/_authenticated/movimentacoes'
+    | '/_authenticated/servicos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -124,6 +184,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/a-receber': {
+      id: '/_authenticated/a-receber'
+      path: '/a-receber'
+      fullPath: '/a-receber'
+      preLoaderRoute: typeof AuthenticatedAReceberRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/agenda': {
+      id: '/_authenticated/agenda'
+      path: '/agenda'
+      fullPath: '/agenda'
+      preLoaderRoute: typeof AuthenticatedAgendaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/clientes': {
+      id: '/_authenticated/clientes'
+      path: '/clientes'
+      fullPath: '/clientes'
+      preLoaderRoute: typeof AuthenticatedClientesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/contas': {
       id: '/_authenticated/contas'
       path: '/contas'
@@ -152,21 +233,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMovimentacoesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/servicos': {
+      id: '/_authenticated/servicos'
+      path: '/servicos'
+      fullPath: '/servicos'
+      preLoaderRoute: typeof AuthenticatedServicosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAReceberRoute: typeof AuthenticatedAReceberRoute
+  AuthenticatedAgendaRoute: typeof AuthenticatedAgendaRoute
+  AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedContasRoute: typeof AuthenticatedContasRoute
   AuthenticatedInicioRoute: typeof AuthenticatedInicioRoute
   AuthenticatedMetasRoute: typeof AuthenticatedMetasRoute
   AuthenticatedMovimentacoesRoute: typeof AuthenticatedMovimentacoesRoute
+  AuthenticatedServicosRoute: typeof AuthenticatedServicosRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAReceberRoute: AuthenticatedAReceberRoute,
+  AuthenticatedAgendaRoute: AuthenticatedAgendaRoute,
+  AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedContasRoute: AuthenticatedContasRoute,
   AuthenticatedInicioRoute: AuthenticatedInicioRoute,
   AuthenticatedMetasRoute: AuthenticatedMetasRoute,
   AuthenticatedMovimentacoesRoute: AuthenticatedMovimentacoesRoute,
+  AuthenticatedServicosRoute: AuthenticatedServicosRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
