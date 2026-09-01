@@ -52,7 +52,21 @@ type ServiceMetadata = {
 
 type ServiceMetadataMap = Record<string, ServiceMetadata>;
 
+type SelectedService = {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+};
+
+type AppointmentServicesMap = Record<
+  string,
+  SelectedService[]
+>;
+
 const METADATA_KEY_PREFIX = "studio-services-metadata-";
+const APPOINTMENT_SERVICES_KEY_PREFIX =
+  "studio-appointment-services-";
 
 const DAY_START_HOUR = 7;
 const DAY_END_HOUR = 22;
@@ -62,10 +76,19 @@ function getMetadataKey(householdId: string) {
   return `${METADATA_KEY_PREFIX}${householdId}`;
 }
 
+function getAppointmentServicesKey(
+  householdId: string
+) {
+  return `${APPOINTMENT_SERVICES_KEY_PREFIX}${householdId}`;
+}
+
 function loadServiceMetadata(
   householdId?: string
 ): ServiceMetadataMap {
-  if (!householdId || typeof window === "undefined") {
+  if (
+    !householdId ||
+    typeof window === "undefined"
+  ) {
     return {};
   }
 
@@ -82,15 +105,64 @@ function loadServiceMetadata(
   }
 }
 
-function formatDuration(minutes: number) {
-  if (!minutes) return "1h";
+function loadAppointmentServices(
+  householdId?: string
+): AppointmentServicesMap {
+  if (
+    !householdId ||
+    typeof window === "undefined"
+  ) {
+    return {};
+  }
+
+  try {
+    const saved = localStorage.getItem(
+      getAppointmentServicesKey(
+        householdId
+      )
+    );
+
+    if (!saved) return {};
+
+    return JSON.parse(
+      saved
+    ) as AppointmentServicesMap;
+  } catch {
+    return {};
+  }
+}
+
+function saveAppointmentServices(
+  householdId: string,
+  data: AppointmentServicesMap
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(
+    getAppointmentServicesKey(
+      householdId
+    ),
+    JSON.stringify(data)
+  );
+}
+
+function formatDuration(
+  minutes: number
+) {
+  if (!minutes) return "Duração não definida";
 
   if (minutes < 60) {
     return `${minutes} min`;
   }
 
-  const hours = Math.floor(minutes / 60);
-  const remaining = minutes % 60;
+  const hours = Math.floor(
+    minutes / 60
+  );
+
+  const remaining =
+    minutes % 60;
 
   if (!remaining) {
     return hours === 1
@@ -101,13 +173,16 @@ function formatDuration(minutes: number) {
   return `${hours}h ${remaining}min`;
 }
 
-function timeToMinutes(time: string | null) {
+function timeToMinutes(
+  time: string | null
+) {
   if (!time) return null;
 
-  const [hours, minutes] = time
-    .slice(0, 5)
-    .split(":")
-    .map(Number);
+  const [hours, minutes] =
+    time
+      .slice(0, 5)
+      .split(":")
+      .map(Number);
 
   if (
     Number.isNaN(hours) ||
@@ -119,16 +194,26 @@ function timeToMinutes(time: string | null) {
   return hours * 60 + minutes;
 }
 
-function minutesToTime(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+function minutesToTime(
+  minutes: number
+) {
+  const hours = Math.floor(
+    minutes / 60
+  );
 
-  return `${String(hours).padStart(2, "0")}:${String(
+  const mins =
+    minutes % 60;
+
+  return `${String(
+    hours
+  ).padStart(2, "0")}:${String(
     mins
   ).padStart(2, "0")}`;
 }
 
-function dateToKey(date: Date) {
+function dateToKey(
+  date: Date
+) {
   return `${date.getFullYear()}-${String(
     date.getMonth() + 1
   ).padStart(2, "0")}-${String(
@@ -147,58 +232,90 @@ function getClient(
 }
 
 function AgendaPage() {
-  const { data: household } = useHousehold();
-  const queryClient = useQueryClient();
+  const {
+    data: household,
+  } = useHousehold();
+
+  const queryClient =
+    useQueryClient();
 
   const today = new Date();
 
-  const [selectedMonth, setSelectedMonth] =
-    useState(
-      new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        1
-      )
-    );
+  const [
+    selectedMonth,
+    setSelectedMonth,
+  ] = useState(
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    )
+  );
 
-  const [viewMode, setViewMode] =
-    useState<"dia" | "mes">("dia");
+  const [
+    viewMode,
+    setViewMode,
+  ] = useState<
+    "dia" | "mes"
+  >("dia");
 
-  const [selectedDay, setSelectedDay] =
-    useState(dateToKey(today));
+  const [
+    selectedDay,
+    setSelectedDay,
+  ] = useState(
+    dateToKey(today)
+  );
 
-  const [showForm, setShowForm] =
-    useState(false);
+  const [
+    showForm,
+    setShowForm,
+  ] = useState(false);
 
-  const [editing, setEditing] =
-    useState<Appointment | null>(null);
+  const [
+    editing,
+    setEditing,
+  ] = useState<
+    Appointment | null
+  >(null);
 
-  const [clientId, setClientId] =
-    useState("");
+  const [
+    clientId,
+    setClientId,
+  ] = useState("");
 
-  const [serviceId, setServiceId] =
-    useState("");
+  const [
+    selectedServices,
+    setSelectedServices,
+  ] = useState<
+    SelectedService[]
+  >([]);
 
-  const [serviceName, setServiceName] =
-    useState("");
+  const [
+    serviceToAdd,
+    setServiceToAdd,
+  ] = useState("");
 
-  const [total, setTotal] =
-    useState("");
+  const [
+    deposit,
+    setDeposit,
+  ] = useState("");
 
-  const [deposit, setDeposit] =
-    useState("");
+  const [
+    date,
+    setDate,
+  ] = useState(
+    dateToKey(today)
+  );
 
-  const [date, setDate] =
-    useState(dateToKey(today));
+  const [
+    time,
+    setTime,
+  ] = useState("");
 
-  const [time, setTime] =
-    useState("");
-
-  const [duration, setDuration] =
-    useState(60);
-
-  const [saving, setSaving] =
-    useState(false);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
   const serviceMetadata =
     useMemo(
@@ -209,27 +326,49 @@ function AgendaPage() {
       [household?.id]
     );
 
-  const monthStart = useMemo(
-    () =>
-      `${selectedMonth.getFullYear()}-${String(
-        selectedMonth.getMonth() + 1
-      ).padStart(2, "0")}-01`,
-    [selectedMonth]
-  );
-
-  const monthEnd = useMemo(() => {
-    const end = new Date(
-      selectedMonth.getFullYear(),
-      selectedMonth.getMonth() + 1,
-      0
+  const appointmentServices =
+    useMemo(
+      () =>
+        loadAppointmentServices(
+          household?.id
+        ),
+      [household?.id]
     );
 
-    return `${end.getFullYear()}-${String(
-      end.getMonth() + 1
-    ).padStart(2, "0")}-${String(
-      end.getDate()
-    ).padStart(2, "0")}`;
-  }, [selectedMonth]);
+  const monthStart =
+    useMemo(
+      () =>
+        `${selectedMonth.getFullYear()}-${String(
+          selectedMonth.getMonth() + 1
+        ).padStart(
+          2,
+          "0"
+        )}-01`,
+      [selectedMonth]
+    );
+
+  const monthEnd =
+    useMemo(() => {
+      const end =
+        new Date(
+          selectedMonth.getFullYear(),
+          selectedMonth.getMonth() +
+            1,
+          0
+        );
+
+      return `${end.getFullYear()}-${String(
+        end.getMonth() + 1
+      ).padStart(
+        2,
+        "0"
+      )}-${String(
+        end.getDate()
+      ).padStart(
+        2,
+        "0"
+      )}`;
+    }, [selectedMonth]);
 
   const monthLabel =
     selectedMonth.toLocaleDateString(
@@ -240,63 +379,79 @@ function AgendaPage() {
       }
     );
 
-  const { data: clients = [] } =
-    useQuery({
-      queryKey: [
-        "studio-clients",
-        household?.id,
-      ],
-      enabled: Boolean(
+  const {
+    data: clients = [],
+  } = useQuery({
+    queryKey: [
+      "studio-clients",
+      household?.id,
+    ],
+    enabled:
+      Boolean(
         household?.id
       ),
-      queryFn: async () => {
-        const { data, error } =
-          await supabase
-            .from("studio_clients")
-            .select(
-              "id, name, phone"
-            )
-            .eq(
-              "household_id",
-              household!.id
-            )
-            .order("name");
+    queryFn: async () => {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "studio_clients"
+        )
+        .select(
+          "id, name, phone"
+        )
+        .eq(
+          "household_id",
+          household!.id
+        )
+        .order("name");
 
-        if (error) throw error;
+      if (error) throw error;
 
-        return data ?? [];
-      },
-    });
+      return data ?? [];
+    },
+  });
 
-  const { data: services = [] } =
-    useQuery({
-      queryKey: [
-        "studio-services",
-        household?.id,
-      ],
-      enabled: Boolean(
+  const {
+    data: services = [],
+  } = useQuery({
+    queryKey: [
+      "studio-services",
+      household?.id,
+    ],
+    enabled:
+      Boolean(
         household?.id
       ),
-      queryFn: async () => {
-        const { data, error } =
-          await supabase
-            .from("studio_services")
-            .select(
-              "id, name, default_price"
-            )
-            .eq(
-              "household_id",
-              household!.id
-            )
-            .eq("active", true)
-            .order("name");
+    queryFn: async () => {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "studio_services"
+        )
+        .select(
+          "id, name, default_price"
+        )
+        .eq(
+          "household_id",
+          household!.id
+        )
+        .eq(
+          "active",
+          true
+        )
+        .order("name");
 
-        if (error) throw error;
+      if (error) throw error;
 
-        return (data ??
-          []) as Service[];
-      },
-    });
+      return (
+        data ?? []
+      ) as Service[];
+    },
+  });
 
   const {
     data: appointments = [],
@@ -308,61 +463,67 @@ function AgendaPage() {
       monthStart,
       monthEnd,
     ],
-    enabled: Boolean(
-      household?.id
-    ),
+    enabled:
+      Boolean(
+        household?.id
+      ),
     queryFn: async () => {
-      const { data, error } =
-        await supabase
-          .from("studio_appointments")
-          .select(
-            `
-            id,
-            client_id,
-            service_id,
-            service_name,
-            total_amount,
-            deposit_amount,
-            received_amount,
-            scheduled_date,
-            scheduled_time,
-            status,
-            studio_clients(name, phone)
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "studio_appointments"
+        )
+        .select(
           `
-          )
-          .eq(
-            "household_id",
-            household!.id
-          )
-          .gte(
-            "scheduled_date",
-            monthStart
-          )
-          .lte(
-            "scheduled_date",
-            monthEnd
-          )
-          .neq(
-            "status",
-            "cancelado"
-          )
-          .order(
-            "scheduled_date",
-            {
-              ascending: true,
-            }
-          )
-          .order(
-            "scheduled_time",
-            {
-              ascending: true,
-            }
-          );
+          id,
+          client_id,
+          service_id,
+          service_name,
+          total_amount,
+          deposit_amount,
+          received_amount,
+          scheduled_date,
+          scheduled_time,
+          status,
+          studio_clients(name, phone)
+        `
+        )
+        .eq(
+          "household_id",
+          household!.id
+        )
+        .gte(
+          "scheduled_date",
+          monthStart
+        )
+        .lte(
+          "scheduled_date",
+          monthEnd
+        )
+        .neq(
+          "status",
+          "cancelado"
+        )
+        .order(
+          "scheduled_date",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "scheduled_time",
+          {
+            ascending: true,
+          }
+        );
 
       if (error) throw error;
 
-      return (data ??
-        []) as Appointment[];
+      return (
+        data ?? []
+      ) as Appointment[];
     },
   });
 
@@ -375,20 +536,27 @@ function AgendaPage() {
               appointment.scheduled_date ===
               selectedDay
           )
-          .sort((a, b) => {
-            const aTime =
-              timeToMinutes(
-                a.scheduled_time
-              ) ?? 0;
+          .sort(
+            (a, b) => {
+              const aTime =
+                timeToMinutes(
+                  a.scheduled_time
+                ) ?? 0;
 
-            const bTime =
-              timeToMinutes(
-                b.scheduled_time
-              ) ?? 0;
+              const bTime =
+                timeToMinutes(
+                  b.scheduled_time
+                ) ?? 0;
 
-            return aTime - bTime;
-          }),
-      [appointments, selectedDay]
+              return (
+                aTime - bTime
+              );
+            }
+          ),
+      [
+        appointments,
+        selectedDay,
+      ]
     );
 
   function parseMoney(
@@ -397,8 +565,14 @@ function AgendaPage() {
     return (
       Number(
         value
-          .replace(/\./g, "")
-          .replace(",", ".")
+          .replace(
+            /\./g,
+            ""
+          )
+          .replace(
+            ",",
+            "."
+          )
       ) || 0
     );
   }
@@ -415,75 +589,147 @@ function AgendaPage() {
     );
   }
 
-  function getDuration(
-    appointment: Appointment
-  ) {
-    if (
-      appointment.service_id &&
-      serviceMetadata[
-        appointment.service_id
-      ]
-    ) {
-      return (
-        serviceMetadata[
-          appointment.service_id
-        ].duration_minutes || 60
-      );
-    }
-
-    const matchingService =
-      services.find(
-        (service) =>
-          service.id ===
-          appointment.service_id
-      );
-
-    if (
-      matchingService &&
-      serviceMetadata[
-        matchingService.id
-      ]
-    ) {
-      return (
-        serviceMetadata[
-          matchingService.id
-        ].duration_minutes || 60
-      );
-    }
-
-    return 60;
-  }
-
   function getServiceDuration(
     id: string
   ) {
     return (
       serviceMetadata[id]
-        ?.duration_minutes || 60
+        ?.duration_minutes ||
+      60
+    );
+  }
+
+  function getAppointmentServiceList(
+    appointment: Appointment
+  ) {
+    const saved =
+      appointmentServices[
+        appointment.id
+      ];
+
+    if (
+      saved &&
+      saved.length > 0
+    ) {
+      return saved;
+    }
+
+    if (
+      appointment.service_id
+    ) {
+      const service =
+        services.find(
+          (item) =>
+            item.id ===
+            appointment.service_id
+        );
+
+      if (service) {
+        return [
+          {
+            id: service.id,
+            name:
+              service.name,
+            price:
+              Number(
+                appointment.total_amount
+              ),
+            duration:
+              getServiceDuration(
+                service.id
+              ),
+          },
+        ];
+      }
+    }
+
+    return [
+      {
+        id:
+          appointment.service_id ??
+          "legacy",
+        name:
+          appointment.service_name,
+        price:
+          Number(
+            appointment.total_amount
+          ),
+        duration: 60,
+      },
+    ];
+  }
+
+  function getDuration(
+    appointment: Appointment
+  ) {
+    return getAppointmentServiceList(
+      appointment
+    ).reduce(
+      (
+        total,
+        service
+      ) =>
+        total +
+        service.duration,
+      0
+    );
+  }
+
+  function getSelectedTotal() {
+    return selectedServices.reduce(
+      (
+        total,
+        service
+      ) =>
+        total +
+        service.price,
+      0
+    );
+  }
+
+  function getSelectedDuration() {
+    return selectedServices.reduce(
+      (
+        total,
+        service
+      ) =>
+        total +
+        service.duration,
+      0
     );
   }
 
   function previousMonth() {
-    const next = new Date(
-      selectedMonth.getFullYear(),
-      selectedMonth.getMonth() - 1,
-      1
+    const next =
+      new Date(
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() -
+          1,
+        1
+      );
+
+    setSelectedMonth(
+      next
     );
 
-    setSelectedMonth(next);
     setSelectedDay(
       dateToKey(next)
     );
   }
 
   function nextMonth() {
-    const next = new Date(
-      selectedMonth.getFullYear(),
-      selectedMonth.getMonth() + 1,
-      1
+    const next =
+      new Date(
+        selectedMonth.getFullYear(),
+        selectedMonth.getMonth() +
+          1,
+        1
+      );
+
+    setSelectedMonth(
+      next
     );
 
-    setSelectedMonth(next);
     setSelectedDay(
       dateToKey(next)
     );
@@ -517,9 +763,10 @@ function AgendaPage() {
 
     setEditing(null);
     setClientId("");
-    setServiceId("");
-    setServiceName("");
-    setTotal("");
+    setSelectedServices(
+      []
+    );
+    setServiceToAdd("");
     setDeposit("");
     setDate(
       appointmentDate
@@ -527,30 +774,32 @@ function AgendaPage() {
     setTime(
       timeValue ?? ""
     );
-    setDuration(60);
     setShowForm(true);
   }
 
   function openEdit(
     appointment: Appointment
   ) {
-    setEditing(appointment);
+    const savedServices =
+      getAppointmentServiceList(
+        appointment
+      );
+
+    setEditing(
+      appointment
+    );
+
     setClientId(
-      appointment.client_id ?? ""
+      appointment.client_id ??
+        ""
     );
-    setServiceId(
-      appointment.service_id ?? ""
+
+    setSelectedServices(
+      savedServices
     );
-    setServiceName(
-      appointment.service_name
-    );
-    setTotal(
-      formatMoney(
-        Number(
-          appointment.total_amount
-        )
-      )
-    );
+
+    setServiceToAdd("");
+
     setDeposit(
       formatMoney(
         Number(
@@ -558,18 +807,17 @@ function AgendaPage() {
         )
       )
     );
+
     setDate(
       appointment.scheduled_date
     );
+
     setTime(
       appointment.scheduled_time
-        ?.slice(0, 5) ?? ""
+        ?.slice(0, 5) ??
+        ""
     );
-    setDuration(
-      getDuration(
-        appointment
-      )
-    );
+
     setShowForm(true);
   }
 
@@ -578,35 +826,74 @@ function AgendaPage() {
 
     setShowForm(false);
     setEditing(null);
+    setSelectedServices(
+      []
+    );
+    setServiceToAdd("");
   }
 
-  function handleServiceChange(
-    id: string
-  ) {
-    setServiceId(id);
+  function addService() {
+    if (!serviceToAdd) {
+      return;
+    }
 
     const service =
       services.find(
         (item) =>
-          item.id === id
+          item.id ===
+          serviceToAdd
       );
 
-    if (!service) return;
+    if (!service) {
+      return;
+    }
 
-    setServiceName(
-      service.name
+    const alreadyAdded =
+      selectedServices.some(
+        (item) =>
+          item.id ===
+          service.id
+      );
+
+    if (alreadyAdded) {
+      alert(
+        "Este serviço já foi adicionado."
+      );
+      return;
+    }
+
+    setSelectedServices(
+      [
+        ...selectedServices,
+        {
+          id: service.id,
+          name:
+            service.name,
+          price:
+            Number(
+              service.default_price
+            ),
+          duration:
+            getServiceDuration(
+              service.id
+            ),
+        },
+      ]
     );
 
-    setTotal(
-      formatMoney(
-        Number(
-          service.default_price
+    setServiceToAdd("");
+  }
+
+  function removeService(
+    serviceId: string
+  ) {
+    setSelectedServices(
+      (current) =>
+        current.filter(
+          (service) =>
+            service.id !==
+            serviceId
         )
-      )
-    );
-
-    setDuration(
-      getServiceDuration(id)
     );
   }
 
@@ -622,7 +909,8 @@ function AgendaPage() {
       );
 
     if (
-      newStart === null
+      newStart ===
+      null
     ) {
       return false;
     }
@@ -685,13 +973,36 @@ function AgendaPage() {
     if (
       !household?.id ||
       !clientId ||
-      !serviceName ||
       !date ||
-      !total ||
       !time
     ) {
       alert(
-        "Preencha cliente, serviço, data, horário e valor."
+        "Preencha cliente, data e horário."
+      );
+      return;
+    }
+
+    if (
+      selectedServices.length ===
+      0
+    ) {
+      alert(
+        "Adicione pelo menos um serviço."
+      );
+      return;
+    }
+
+    const totalAmount =
+      getSelectedTotal();
+
+    const totalDuration =
+      getSelectedDuration();
+
+    if (
+      !totalDuration
+    ) {
+      alert(
+        "A duração dos serviços precisa ser válida."
       );
       return;
     }
@@ -700,7 +1011,7 @@ function AgendaPage() {
       hasConflict(
         time,
         date,
-        duration,
+        totalDuration,
         editing?.id
       )
     ) {
@@ -714,7 +1025,9 @@ function AgendaPage() {
 
     try {
       const {
-        data: { user },
+        data: {
+          user,
+        },
       } =
         await supabase.auth.getUser();
 
@@ -724,81 +1037,126 @@ function AgendaPage() {
         );
       }
 
-      const totalAmount =
-        parseMoney(total);
-
       const depositAmount =
         Math.min(
-          parseMoney(deposit),
+          parseMoney(
+            deposit
+          ),
           totalAmount
         );
 
+      const serviceName =
+        selectedServices
+          .map(
+            (service) =>
+              service.name
+          )
+          .join(" + ");
+
+      let appointmentId =
+        editing?.id;
+
       if (editing) {
-        const { error } =
-          await supabase
-            .from(
-              "studio_appointments"
-            )
-            .update({
-              client_id:
-                clientId,
-              service_id:
-                serviceId || null,
-              service_name:
-                serviceName,
-              total_amount:
-                totalAmount,
-              deposit_amount:
-                depositAmount,
-              received_amount:
-                depositAmount,
-              scheduled_date:
-                date,
-              scheduled_time:
-                time,
-            })
-            .eq(
-              "id",
-              editing.id
-            )
-            .eq(
-              "household_id",
-              household.id
-            );
+        const {
+          error,
+        } = await supabase
+          .from(
+            "studio_appointments"
+          )
+          .update({
+            client_id:
+              clientId,
+            service_id:
+              selectedServices[0]
+                ?.id ??
+              null,
+            service_name:
+              serviceName,
+            total_amount:
+              totalAmount,
+            deposit_amount:
+              depositAmount,
+            received_amount:
+              depositAmount,
+            scheduled_date:
+              date,
+            scheduled_time:
+              time,
+          })
+          .eq(
+            "id",
+            editing.id
+          )
+          .eq(
+            "household_id",
+            household.id
+          );
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
       } else {
-        const { error } =
-          await supabase
-            .from(
-              "studio_appointments"
-            )
-            .insert({
-              household_id:
-                household.id,
-              created_by:
-                user.id,
-              client_id:
-                clientId,
-              service_id:
-                serviceId || null,
-              service_name:
-                serviceName,
-              total_amount:
-                totalAmount,
-              deposit_amount:
-                depositAmount,
-              received_amount:
-                depositAmount,
-              scheduled_date:
-                date,
-              scheduled_time:
-                time,
-              status:
-                "agendado",
-            });
+        const {
+          data,
+          error,
+        } = await supabase
+          .from(
+            "studio_appointments"
+          )
+          .insert({
+            household_id:
+              household.id,
+            created_by:
+              user.id,
+            client_id:
+              clientId,
+            service_id:
+              selectedServices[0]
+                ?.id ??
+              null,
+            service_name:
+              serviceName,
+            total_amount:
+              totalAmount,
+            deposit_amount:
+              depositAmount,
+            received_amount:
+              depositAmount,
+            scheduled_date:
+              date,
+            scheduled_time:
+              time,
+            status:
+              "agendado",
+          })
+          .select("id")
+          .single();
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
+
+        appointmentId =
+          data.id;
+      }
+
+      if (
+        appointmentId
+      ) {
+        const current =
+          loadAppointmentServices(
+            household.id
+          );
+
+        current[
+          appointmentId
+        ] =
+          selectedServices;
+
+        saveAppointmentServices(
+          household.id,
+          current
+        );
       }
 
       await queryClient.invalidateQueries(
@@ -809,7 +1167,9 @@ function AgendaPage() {
         }
       );
 
-      setSelectedDay(date);
+      setSelectedDay(
+        date
+      );
 
       setSelectedMonth(
         new Date(
@@ -819,7 +1179,9 @@ function AgendaPage() {
 
       closeForm();
     } catch (error) {
-      console.error(error);
+      console.error(
+        error
+      );
 
       alert(
         error instanceof Error
@@ -847,22 +1209,39 @@ function AgendaPage() {
     }
 
     try {
-      const { error } =
-        await supabase
-          .from(
-            "studio_appointments"
-          )
-          .delete()
-          .eq(
-            "id",
-            appointment.id
-          )
-          .eq(
-            "household_id",
-            household.id
-          );
+      const {
+        error,
+      } = await supabase
+        .from(
+          "studio_appointments"
+        )
+        .delete()
+        .eq(
+          "id",
+          appointment.id
+        )
+        .eq(
+          "household_id",
+          household.id
+        );
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
+      const current =
+        loadAppointmentServices(
+          household.id
+        );
+
+      delete current[
+        appointment.id
+      ];
+
+      saveAppointmentServices(
+        household.id,
+        current
+      );
 
       await queryClient.invalidateQueries(
         {
@@ -872,7 +1251,9 @@ function AgendaPage() {
         }
       );
     } catch (error) {
-      console.error(error);
+      console.error(
+        error
+      );
 
       alert(
         error instanceof Error
@@ -886,7 +1267,9 @@ function AgendaPage() {
     appointment: Appointment
   ) {
     const client =
-      getClient(appointment);
+      getClient(
+        appointment
+      );
 
     if (!client?.phone) {
       alert(
@@ -916,7 +1299,8 @@ function AgendaPage() {
         appointment.scheduled_time?.slice(
           0,
           5
-        ) ?? "a confirmar"
+        ) ??
+        "a confirmar"
       }\n` +
       `✨ Serviço: ${appointment.service_name}\n\n` +
       `Pedimos, por favor, que chegue 5 minutos antes do horário agendado.\n\n` +
@@ -934,39 +1318,51 @@ function AgendaPage() {
   async function finalizeAppointment(
     appointment: Appointment
   ) {
-    if (!household?.id) return;
+    if (!household?.id) {
+      return;
+    }
 
     const confirmed =
       window.confirm(
-        `Finalizar o atendimento de ${getClient(appointment)?.name ?? "cliente"} e marcar como pago?`
+        `Finalizar o atendimento de ${
+          getClient(
+            appointment
+          )?.name ??
+          "cliente"
+        } e marcar como pago?`
       );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      const { error } =
-        await supabase
-          .from(
-            "studio_appointments"
-          )
-          .update({
-            status:
-              "concluido",
-            received_amount:
-              Number(
-                appointment.total_amount
-              ),
-          })
-          .eq(
-            "id",
-            appointment.id
-          )
-          .eq(
-            "household_id",
-            household.id
-          );
+      const {
+        error,
+      } = await supabase
+        .from(
+          "studio_appointments"
+        )
+        .update({
+          status:
+            "concluido",
+          received_amount:
+            Number(
+              appointment.total_amount
+            ),
+        })
+        .eq(
+          "id",
+          appointment.id
+        )
+        .eq(
+          "household_id",
+          household.id
+        );
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       await queryClient.invalidateQueries(
         {
@@ -984,7 +1380,9 @@ function AgendaPage() {
         }
       );
     } catch (error) {
-      console.error(error);
+      console.error(
+        error
+      );
 
       alert(
         error instanceof Error
@@ -1014,7 +1412,6 @@ function AgendaPage() {
         </button>
       }
     >
-      {/* CABEÇALHO */}
       <div className="rounded-2xl border border-black/[0.05] bg-white p-3 shadow-sm">
         <div className="flex items-center justify-between">
           <button
@@ -1066,7 +1463,6 @@ function AgendaPage() {
           </button>
         </div>
 
-        {/* VISÕES */}
         <div className="mt-3 flex rounded-xl bg-[#f3e5e8] p-1">
           <button
             type="button"
@@ -1104,7 +1500,6 @@ function AgendaPage() {
         </div>
       </div>
 
-      {/* CONTEÚDO */}
       <section className="mt-5">
         {isLoading ? (
           <div className="rounded-2xl border border-black/[0.05] bg-white px-4 py-8 text-center text-sm text-[#817b7d]">
@@ -1142,6 +1537,9 @@ function AgendaPage() {
             getDuration={
               getDuration
             }
+            getAppointmentServices={
+              getAppointmentServiceList
+            }
             onSelectTime={(
               timeValue
             ) =>
@@ -1166,7 +1564,6 @@ function AgendaPage() {
         )}
       </section>
 
-      {/* MODAL */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-5">
           <div className="w-full max-w-md rounded-t-3xl bg-[#faf9f8] p-5 shadow-2xl sm:rounded-3xl">
@@ -1199,7 +1596,6 @@ function AgendaPage() {
             </div>
 
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pb-2">
-              {/* CLIENTE */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
                   Cliente
@@ -1252,136 +1648,209 @@ function AgendaPage() {
                 </div>
               </div>
 
-              {/* SERVIÇO */}
+              {/* SERVIÇOS */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Serviço
+                  Serviços
                 </label>
 
-                <select
-                  value={
-                    serviceId
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    handleServiceChange(
-                      event
-                        .target
-                        .value
-                    )
-                  }
-                  className="h-11 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                >
-                  <option value="">
-                    Selecione o serviço
-                  </option>
-
-                  {services.map(
-                    (
-                      service
-                    ) => (
-                      <option
-                        key={
-                          service.id
-                        }
-                        value={
-                          service.id
-                        }
-                      >
-                        {
-                          service.name
-                        }{" "}
-                        — R${" "}
-                        {formatMoney(
-                          Number(
-                            service.default_price
-                          )
-                        )}{" "}
-                        ·{" "}
-                        {formatDuration(
-                          getServiceDuration(
+                {selectedServices.length >
+                  0 && (
+                  <div className="mb-2 space-y-2">
+                    {selectedServices.map(
+                      (
+                        service
+                      ) => (
+                        <div
+                          key={
                             service.id
-                          )
-                        )}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
+                          }
+                          className="flex items-center gap-3 rounded-xl border border-[#b7838e]/15 bg-[#f3e5e8] px-3 py-2.5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-[#211f20]">
+                              {
+                                service.name
+                              }
+                            </p>
 
-              {/* DURAÇÃO */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Duração do atendimento
-                </label>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-[10px] text-[#817b7d]">
+                                {formatDuration(
+                                  service.duration
+                                )}
+                              </span>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    30,
-                    45,
-                    60,
-                    90,
-                    120,
-                    180,
-                  ].map(
-                    (
-                      value
-                    ) => (
-                      <button
-                        key={
-                          value
-                        }
-                        type="button"
-                        onClick={() =>
-                          setDuration(
-                            value
+                              <span className="text-[10px] text-[#9d6875]">
+                                R${" "}
+                                {formatMoney(
+                                  service.price
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeService(
+                                service.id
+                              )
+                            }
+                            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white text-[#9d6875]"
+                            aria-label={`Remover ${service.name}`}
+                          >
+                            <X
+                              className="size-3.5"
+                              strokeWidth={
+                                1.8
+                              }
+                            />
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <select
+                    value={
+                      serviceToAdd
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setServiceToAdd(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
+                  >
+                    <option value="">
+                      {selectedServices.length >
+                      0
+                        ? "Adicionar outro serviço"
+                        : "Selecione um serviço"}
+                    </option>
+
+                    {services
+                      .filter(
+                        (
+                          service
+                        ) =>
+                          !selectedServices.some(
+                            (
+                              selected
+                            ) =>
+                              selected.id ===
+                              service.id
                           )
-                        }
-                        className={`rounded-xl border py-2.5 text-xs font-medium ${
-                          duration ===
-                          value
-                            ? "border-[#b7838e] bg-[#f3e5e8] text-[#9d6875]"
-                            : "border-black/[0.06] bg-white text-[#817b7d]"
-                        }`}
-                      >
-                        {formatDuration(
-                          value
-                        )}
-                      </button>
-                    )
-                  )}
+                      )
+                      .map(
+                        (
+                          service
+                        ) => (
+                          <option
+                            key={
+                              service.id
+                            }
+                            value={
+                              service.id
+                            }
+                          >
+                            {
+                              service.name
+                            }{" "}
+                            — R${" "}
+                            {formatMoney(
+                              Number(
+                                service.default_price
+                              )
+                            )}{" "}
+                            ·{" "}
+                            {formatDuration(
+                              getServiceDuration(
+                                service.id
+                              )
+                            )}
+                          </option>
+                        )
+                      )}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={
+                      addService
+                    }
+                    disabled={
+                      !serviceToAdd
+                    }
+                    className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-[#b7838e] px-4 text-xs font-semibold text-white disabled:opacity-40"
+                  >
+                    <Plus
+                      className="size-4"
+                      strokeWidth={
+                        1.8
+                      }
+                    />
+                    Adicionar
+                  </button>
                 </div>
 
-                <p className="mt-2 text-[10px] text-[#aaa5a6]">
-                  A duração do serviço já é carregada automaticamente. Ajuste somente se necessário neste atendimento.
-                </p>
+                {selectedServices.length >
+                  1 && (
+                  <p className="mt-2 text-[10px] text-[#817b7d]">
+                    Você pode combinar vários serviços no mesmo atendimento.
+                  </p>
+                )}
               </div>
 
-              {/* VALOR */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Valor do atendimento
-                </label>
+              {/* RESUMO DOS SERVIÇOS */}
+              {selectedServices.length >
+                0 && (
+                <div className="rounded-2xl bg-[#f3e5e8] p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#817b7d]">
+                      Serviços
+                    </span>
 
-                <input
-                  value={
-                    total
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setTotal(
-                      event
-                        .target
-                        .value
-                    )
-                  }
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  className="h-11 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                />
-              </div>
+                    <strong className="text-xs text-[#9d6875]">
+                      {
+                        selectedServices.length
+                      }
+                    </strong>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-xs text-[#817b7d]">
+                      Tempo total
+                    </span>
+
+                    <strong className="text-xs text-[#9d6875]">
+                      {formatDuration(
+                        getSelectedDuration()
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between border-t border-[#b7838e]/20 pt-2">
+                    <span className="text-xs font-medium text-[#625d5f]">
+                      Valor total
+                    </span>
+
+                    <strong className="text-sm text-[#211f20]">
+                      R${" "}
+                      {formatMoney(
+                        getSelectedTotal()
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              )}
 
               {/* SINAL */}
               <div>
@@ -1457,8 +1926,9 @@ function AgendaPage() {
                 </div>
               </div>
 
-              {/* RESUMO */}
-              {total && (
+              {/* RESUMO FINANCEIRO */}
+              {selectedServices.length >
+                0 && (
                 <div className="rounded-2xl bg-[#f3e5e8] p-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-[#817b7d]">
@@ -1468,9 +1938,7 @@ function AgendaPage() {
                     <strong className="text-sm text-[#211f20]">
                       R${" "}
                       {formatMoney(
-                        parseMoney(
-                          total
-                        )
+                        getSelectedTotal()
                       )}
                     </strong>
                   </div>
@@ -1500,9 +1968,7 @@ function AgendaPage() {
                       {formatMoney(
                         Math.max(
                           0,
-                          parseMoney(
-                            total
-                          ) -
+                          getSelectedTotal() -
                             parseMoney(
                               deposit
                             )
@@ -1518,7 +1984,7 @@ function AgendaPage() {
 
                     <strong className="text-xs text-[#9d6875]">
                       {formatDuration(
-                        duration
+                        getSelectedDuration()
                       )}
                     </strong>
                   </div>
@@ -1532,7 +1998,9 @@ function AgendaPage() {
                 saveAppointment
               }
               disabled={
-                saving
+                saving ||
+                selectedServices.length ===
+                  0
               }
               className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-[#b7838e] text-sm font-semibold text-white shadow-sm disabled:opacity-60"
             >
@@ -1553,6 +2021,7 @@ function DaySchedule({
   selectedDay,
   appointments,
   getDuration,
+  getAppointmentServices,
   onSelectTime,
   onEdit,
   onDelete,
@@ -1564,6 +2033,9 @@ function DaySchedule({
   getDuration: (
     appointment: Appointment
   ) => number;
+  getAppointmentServices: (
+    appointment: Appointment
+  ) => SelectedService[];
   onSelectTime: (
     time: string
   ) => void;
@@ -1631,7 +2103,8 @@ function DaySchedule({
     }
   );
 
-  const slots: number[] = [];
+  const slots: number[] =
+    [];
 
   for (
     let minute =
@@ -1640,7 +2113,9 @@ function DaySchedule({
       DAY_END_HOUR * 60;
     minute += SLOT_MINUTES
   ) {
-    slots.push(minute);
+    slots.push(
+      minute
+    );
   }
 
   function appointmentAt(
@@ -1663,7 +2138,6 @@ function DaySchedule({
 
   return (
     <div>
-      {/* DIA */}
       <div className="mb-4 flex items-center justify-between rounded-2xl bg-[#f3e5e8] px-4 py-3">
         <div>
           <p className="text-[10px] uppercase tracking-[0.15em] text-[#9d6875]">
@@ -1692,7 +2166,6 @@ function DaySchedule({
         </button>
       </div>
 
-      {/* HORÁRIOS */}
       <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white shadow-sm">
         {slots.map(
           (minute) => {
@@ -1719,6 +2192,11 @@ function DaySchedule({
                   appointment
                 );
 
+              const services =
+                getAppointmentServices(
+                  appointment
+                );
+
               const remaining =
                 Number(
                   appointment.total_amount
@@ -1729,7 +2207,9 @@ function DaySchedule({
 
               return (
                 <div
-                  key={minute}
+                  key={
+                    minute
+                  }
                   className="border-b border-black/[0.05] last:border-b-0"
                 >
                   <div className="flex min-h-[74px]">
@@ -1750,11 +2230,25 @@ function DaySchedule({
                                 "Cliente"}
                             </p>
 
-                            <p className="mt-1 truncate text-xs text-[#817b7d]">
-                              {
-                                appointment.service_name
-                              }
-                            </p>
+                            <div className="mt-2 space-y-1">
+                              {services.map(
+                                (
+                                  service
+                                ) => (
+                                  <p
+                                    key={
+                                      service.id
+                                    }
+                                    className="truncate text-xs text-[#817b7d]"
+                                  >
+                                    ✨{" "}
+                                    {
+                                      service.name
+                                    }
+                                  </p>
+                                )
+                              )}
+                            </div>
 
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span className="flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] text-[#817b7d]">
@@ -1784,7 +2278,7 @@ function DaySchedule({
                           </div>
 
                           {appointment.status ===
-                            "concluido" ? (
+                          "concluido" ? (
                             <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#b7838e] text-white">
                               <Check
                                 className="size-4"
@@ -1813,6 +2307,19 @@ function DaySchedule({
                             </button>
                           )}
                         </div>
+
+                        {services.length >
+                          1 && (
+                          <div className="mt-2 rounded-lg bg-white/70 px-2 py-1.5">
+                            <p className="text-[9px] text-[#817b7d]">
+                              {services.length}{" "}
+                              serviços •{" "}
+                              {formatDuration(
+                                duration
+                              )}
+                            </p>
+                          </div>
+                        )}
 
                         <div className="mt-3 grid grid-cols-3 gap-1.5 border-t border-[#b7838e]/15 pt-2">
                           <button
@@ -1910,7 +2417,9 @@ function DaySchedule({
 
             const previousAppointment =
               appointments.find(
-                (appointment) => {
+                (
+                  appointment
+                ) => {
                   const start =
                     timeToMinutes(
                       appointment.scheduled_time
@@ -1943,7 +2452,9 @@ function DaySchedule({
             ) {
               return (
                 <div
-                  key={minute}
+                  key={
+                    minute
+                  }
                   className="flex min-h-[46px] border-b border-black/[0.04] bg-[#faf9f8]"
                 >
                   <div className="w-[62px] shrink-0 border-r border-black/[0.05] px-2 py-3 text-center text-[10px] text-[#aaa5a6]">
@@ -1966,7 +2477,9 @@ function DaySchedule({
 
             return (
               <button
-                key={minute}
+                key={
+                  minute
+                }
                 type="button"
                 onClick={() =>
                   onSelectTime(
