@@ -34,7 +34,8 @@ function ClientesPage() {
 
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editingClient, setEditingClient] =
+    useState<Client | null>(null);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -62,9 +63,17 @@ function ClientesPage() {
   );
 
   useEffect(() => {
-    const selectedClientId = window.location.hash.replace("#cliente-", "");
+    const selectedClientId = window.location.hash.replace(
+      "#cliente-",
+      ""
+    );
+
     if (!selectedClientId || showForm) return;
-    const client = clients.find((item) => item.id === selectedClientId);
+
+    const client = clients.find(
+      (item) => item.id === selectedClientId
+    );
+
     if (client) openEditClient(client);
   }, [clients, showForm]);
 
@@ -85,8 +94,6 @@ function ClientesPage() {
   }
 
   function closeForm() {
-    if (saving) return;
-
     setShowForm(false);
     setEditingClient(null);
     setName("");
@@ -95,7 +102,15 @@ function ClientesPage() {
   }
 
   async function saveClient() {
-    if (!household?.id || !name.trim()) return;
+    if (!household?.id) {
+      alert("Não foi possível identificar o estúdio.");
+      return;
+    }
+
+    if (!name.trim()) {
+      alert("Informe o nome da cliente.");
+      return;
+    }
 
     setSaving(true);
 
@@ -117,7 +132,9 @@ function ClientesPage() {
           data: { user },
         } = await supabase.auth.getUser();
 
-        if (!user) throw new Error("Usuário não autenticado.");
+        if (!user) {
+          throw new Error("Usuário não autenticado.");
+        }
 
         const { error } = await supabase
           .from("studio_clients")
@@ -139,7 +156,12 @@ function ClientesPage() {
       closeForm();
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Não foi possível salvar a cliente.");
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a cliente."
+      );
     } finally {
       setSaving(false);
     }
@@ -166,24 +188,37 @@ function ClientesPage() {
       });
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Não foi possível excluir a cliente.");
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir a cliente."
+      );
     }
   }
 
-  function openWhatsApp(client: Client) {
-    if (!client.phone) {
-      alert("Cadastre o telefone da cliente primeiro.");
-      return;
-    }
-
-    const phone = client.phone.replace(/\D/g, "");
+  function getPhone(client: Client) {
+    const phone = client.phone?.replace(/\D/g, "");
 
     if (!phone) {
-      alert("O telefone cadastrado é inválido.");
-      return;
+      alert("Cadastre o WhatsApp da cliente primeiro.");
+      return null;
     }
 
-    const message = `Olá, ${client.name}! 💕\n\nAqui é o Studio Lary Andrade.\n\nGostaríamos de confirmar seu atendimento.\n\nPedimos, por favor, que chegue 10 minutos antes do horário agendado.\n\nSerá um prazer receber você! 💕\nStudio Lary Andrade`;
+    return phone;
+  }
+
+  function openWhatsApp(client: Client) {
+    const phone = getPhone(client);
+
+    if (!phone) return;
+
+    const message =
+      `Olá, ${client.name}! 💕\n\n` +
+      `Gostaríamos de confirmar seu atendimento.\n\n` +
+      `Pedimos, por favor, que chegue 5 minutos antes do horário agendado.\n\n` +
+      `Será um prazer receber você!\n` +
+      `Studio Lary Andrade`;
 
     window.open(
       `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
@@ -192,26 +227,31 @@ function ClientesPage() {
   }
 
   function openBirthdayWhatsApp(client: Client) {
-    if (!client.phone) {
-      alert("Cadastre o telefone da cliente primeiro.");
-      return;
-    }
+    const phone = getPhone(client);
 
-    const phone = client.phone.replace(/\D/g, "");
-    if (!phone) {
-      alert("O telefone cadastrado é inválido.");
-      return;
-    }
+    if (!phone) return;
 
-    const message = `Olá, ${client.name}! 💕\n\nAqui é o Studio Lary Andrade.\n\nPassando para desejar um feliz aniversário! 🎂✨\n\nQue seu novo ciclo seja cheio de coisas boas, saúde, felicidade e muitos momentos especiais.\n\nUm beijo,\n\nStudio Lary Andrade 💕`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+    const message =
+      `Olá, ${client.name}! 💕\n\n` +
+      `Passando para desejar um feliz aniversário! 🎂✨\n\n` +
+      `Que seu novo ciclo seja cheio de saúde, felicidade e momentos especiais.\n\n` +
+      `Um beijo,\n` +
+      `Studio Lary Andrade`;
+
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
   }
 
   function formatBirthday(value: string) {
-    return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "long",
-    });
+    return new Date(`${value}T12:00:00`).toLocaleDateString(
+      "pt-BR",
+      {
+        day: "2-digit",
+        month: "long",
+      }
+    );
   }
 
   return (
@@ -288,12 +328,19 @@ function ClientesPage() {
                         className="size-3"
                         strokeWidth={1.6}
                       />
-                      {client.phone || "Telefone não informado"}
+                      {client.phone ||
+                        "Telefone não informado"}
                     </p>
+
                     {client.birth_date && (
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-[#817b7d]">
-                        <Cake className="size-3" strokeWidth={1.6} />
-                        {formatBirthday(client.birth_date)}
+                        <Cake
+                          className="size-3"
+                          strokeWidth={1.6}
+                        />
+                        {formatBirthday(
+                          client.birth_date
+                        )}
                       </p>
                     )}
                   </div>
@@ -336,13 +383,19 @@ function ClientesPage() {
                     Excluir
                   </button>
                 </div>
+
                 {client.birth_date && (
                   <button
                     type="button"
-                    onClick={() => openBirthdayWhatsApp(client)}
+                    onClick={() =>
+                      openBirthdayWhatsApp(client)
+                    }
                     className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[#f8eef0] text-xs font-medium text-[#9d6875]"
                   >
-                    <Cake className="size-3.5" strokeWidth={1.7} />
+                    <Cake
+                      className="size-3.5"
+                      strokeWidth={1.7}
+                    />
                     Parabenizar no WhatsApp
                   </button>
                 )}
@@ -371,16 +424,22 @@ function ClientesPage() {
               <button
                 type="button"
                 onClick={closeForm}
-                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d]"
+                disabled={saving}
+                className="flex size-9 items-center justify-center rounded-full bg-[#f6f3f3] text-[#817b7d] disabled:opacity-50"
               >
-                <X className="size-4" strokeWidth={1.7} />
+                <X
+                  className="size-4"
+                  strokeWidth={1.7}
+                />
               </button>
             </div>
 
             <div className="mt-5 space-y-3">
               <input
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
                 placeholder="Nome da cliente"
                 autoFocus
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
@@ -388,25 +447,35 @@ function ClientesPage() {
 
               <input
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
+                onChange={(event) =>
+                  setPhone(event.target.value)
+                }
                 placeholder="WhatsApp / telefone"
                 inputMode="tel"
                 className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
               />
 
               <label className="block">
-                <span className="mb-2 block text-xs text-[#817b7d]">Data de aniversário (opcional)</span>
+                <span className="mb-2 block text-xs text-[#817b7d]">
+                  Data de aniversário (opcional)
+                </span>
+
                 <input
                   type="date"
                   value={birthDate}
-                  onChange={(event) => setBirthDate(event.target.value)}
+                  onChange={(event) =>
+                    setBirthDate(event.target.value)
+                  }
                   className="h-11 w-full rounded-xl border border-black/[0.07] bg-[#faf9f8] px-4 text-sm outline-none focus:border-[#b7838e]/50"
                 />
               </label>
 
               <button
                 type="button"
-                disabled={saving || !name.trim()}
+                disabled={
+                  saving ||
+                  !name.trim()
+                }
                 onClick={saveClient}
                 className="h-11 w-full rounded-xl bg-[#b7838e] text-sm font-semibold text-white disabled:opacity-50"
               >
