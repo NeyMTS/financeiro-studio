@@ -8,9 +8,9 @@ import {
 
 const items = [
   { to: "/inicio", label: "Início", icon: Home },
+  { to: "/agenda", label: "Agenda", icon: CalendarDays },
   { to: "/a-receber", label: "A receber", icon: CircleDollarSign },
   { to: "/clientes", label: "Clientes", icon: UsersRound },
-  { to: "/servicos", label: "Serviços", icon: CalendarDays },
 ] as const;
 
 export function BottomNav() {
