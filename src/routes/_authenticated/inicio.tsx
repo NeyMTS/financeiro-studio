@@ -1,411 +1,149 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
+  Cake,
   CalendarDays,
-  Check,
-  ChevronLeft,
   ChevronRight,
-  Clock3,
-  MessageCircle,
-  Pencil,
-  Plus,
-  Trash2,
-  UserRound,
-  X,
+  LogOut,
+  MoreVertical,
+  Sparkles,
+  WalletCards,
 } from "lucide-react";
-import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useHousehold } from "@/hooks/use-household";
 import { AppShell, EmptyState } from "@/components/AppShell";
+import { useHousehold } from "@/hooks/use-household";
 
-export const Route = createFileRoute("/_authenticated/agenda")({
-  component: AgendaPage,
+export const Route = createFileRoute("/_authenticated/inicio")({
+  head: () => ({
+    meta: [
+      { title: "Studio Lary Andrade" },
+      {
+        name: "description",
+        content: "Gestão financeira e agenda do Studio Lary Andrade.",
+      },
+    ],
+  }),
+  component: InicioPage,
 });
 
 type Appointment = {
   id: string;
-  client_id: string | null;
-  service_id: string | null;
   service_name: string;
   total_amount: number;
-  deposit_amount: number;
   received_amount: number;
   scheduled_date: string;
   scheduled_time: string | null;
   status: string;
   studio_clients:
-    | { name: string; phone: string | null }
-    | { name: string; phone: string | null }[]
+    | { name: string }
+    | { name: string }[]
     | null;
 };
 
-type Service = {
+type BirthdayClient = {
   id: string;
   name: string;
-  default_price: number;
+  birth_date: string;
 };
 
-type ServiceMetadata = {
-  category: string;
-  duration_minutes: number;
-};
-
-type ServiceMetadataMap = Record<string, ServiceMetadata>;
-
-type SelectedService = {
-  id: string;
-  name: string;
-  price: number;
-  duration: number;
-};
-
-type AppointmentServicesMap = Record<
-  string,
-  SelectedService[]
->;
-
-const METADATA_KEY_PREFIX = "studio-services-metadata-";
-const APPOINTMENT_SERVICES_KEY_PREFIX =
-  "studio-appointment-services-";
-
-const DAY_START_HOUR = 7;
-const DAY_END_HOUR = 22;
-const SLOT_MINUTES = 30;
-
-function getMetadataKey(householdId: string) {
-  return `${METADATA_KEY_PREFIX}${householdId}`;
-}
-
-function getAppointmentServicesKey(
-  householdId: string
-) {
-  return `${APPOINTMENT_SERVICES_KEY_PREFIX}${householdId}`;
-}
-
-function loadServiceMetadata(
-  householdId?: string
-): ServiceMetadataMap {
-  if (
-    !householdId ||
-    typeof window === "undefined"
-  ) {
-    return {};
-  }
-
-  try {
-    const saved = localStorage.getItem(
-      getMetadataKey(householdId)
-    );
-
-    if (!saved) return {};
-
-    return JSON.parse(saved) as ServiceMetadataMap;
-  } catch {
-    return {};
-  }
-}
-
-function loadAppointmentServices(
-  householdId?: string
-): AppointmentServicesMap {
-  if (
-    !householdId ||
-    typeof window === "undefined"
-  ) {
-    return {};
-  }
-
-  try {
-    const saved = localStorage.getItem(
-      getAppointmentServicesKey(
-        householdId
-      )
-    );
-
-    if (!saved) return {};
-
-    return JSON.parse(
-      saved
-    ) as AppointmentServicesMap;
-  } catch {
-    return {};
-  }
-}
-
-function saveAppointmentServices(
-  householdId: string,
-  data: AppointmentServicesMap
-) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  localStorage.setItem(
-    getAppointmentServicesKey(
-      householdId
-    ),
-    JSON.stringify(data)
-  );
-}
-
-function formatDuration(
-  minutes: number
-) {
-  if (!minutes) return "Duração não definida";
-
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-
-  const hours = Math.floor(
-    minutes / 60
-  );
-
-  const remaining =
-    minutes % 60;
-
-  if (!remaining) {
-    return hours === 1
-      ? "1 hora"
-      : `${hours} horas`;
-  }
-
-  return `${hours}h ${remaining}min`;
-}
-
-function timeToMinutes(
-  time: string | null
-) {
-  if (!time) return null;
-
-  const [hours, minutes] =
-    time
-      .slice(0, 5)
-      .split(":")
-      .map(Number);
-
-  if (
-    Number.isNaN(hours) ||
-    Number.isNaN(minutes)
-  ) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-}
-
-function minutesToTime(
-  minutes: number
-) {
-  const hours = Math.floor(
-    minutes / 60
-  );
-
-  const mins =
-    minutes % 60;
-
-  return `${String(
-    hours
-  ).padStart(2, "0")}:${String(
-    mins
-  ).padStart(2, "0")}`;
-}
-
-function dateToKey(
-  date: Date
-) {
-  return `${date.getFullYear()}-${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
-}
-
-function getClient(
-  appointment: Appointment
-) {
-  return Array.isArray(
-    appointment.studio_clients
-  )
-    ? appointment.studio_clients[0]
-    : appointment.studio_clients;
-}
-
-function AgendaPage() {
-  const {
-    data: household,
-  } = useHousehold();
-
-  const queryClient =
-    useQueryClient();
+function InicioPage() {
+  const { data: household } = useHousehold();
 
   const today = new Date();
 
-  const [
-    selectedMonth,
-    setSelectedMonth,
-  ] = useState(
-    new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1
-    )
+  const monthStart = `${today.getFullYear()}-${String(
+    today.getMonth() + 1
+  ).padStart(2, "0")}-01`;
+
+  const monthEndDate = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0
   );
 
-  const [
-    viewMode,
-    setViewMode,
-  ] = useState<
-    "dia" | "mes"
-  >("dia");
+  const monthEnd = `${monthEndDate.getFullYear()}-${String(
+    monthEndDate.getMonth() + 1
+  ).padStart(2, "0")}-${String(
+    monthEndDate.getDate()
+  ).padStart(2, "0")}`;
 
-  const [
-    selectedDay,
-    setSelectedDay,
-  ] = useState(
-    dateToKey(today)
-  );
+  const monthLabel = today.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
 
-  const [
-    showForm,
-    setShowForm,
-  ] = useState(false);
+  const { data: transactions = [], isLoading: loadingFinance } =
+    useQuery({
+      queryKey: [
+        "studio-dashboard-transactions",
+        household?.id,
+        monthStart,
+        monthEnd,
+      ],
+      enabled: Boolean(household?.id),
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("id, description, amount, type, date, status")
+          .eq("household_id", household!.id)
+          .gte("date", monthStart)
+          .lte("date", monthEnd)
+          .order("date", { ascending: false });
 
-  const [
-    editing,
-    setEditing,
-  ] = useState<
-    Appointment | null
-  >(null);
+        if (error) throw error;
 
-  const [
-    clientId,
-    setClientId,
-  ] = useState("");
-
-  const [
-    selectedServices,
-    setSelectedServices,
-  ] = useState<
-    SelectedService[]
-  >([]);
-
-  const [
-    serviceToAdd,
-    setServiceToAdd,
-  ] = useState("");
-
-  const [
-    deposit,
-    setDeposit,
-  ] = useState("");
-
-  const [
-    date,
-    setDate,
-  ] = useState(
-    dateToKey(today)
-  );
-
-  const [
-    time,
-    setTime,
-  ] = useState("");
-
-  const [
-    saving,
-    setSaving,
-  ] = useState(false);
-
-  const serviceMetadata =
-    useMemo(
-      () =>
-        loadServiceMetadata(
-          household?.id
-        ),
-      [household?.id]
-    );
-
-  const appointmentServices =
-    useMemo(
-      () =>
-        loadAppointmentServices(
-          household?.id
-        ),
-      [household?.id]
-    );
-
-  const monthStart =
-    useMemo(
-      () =>
-        `${selectedMonth.getFullYear()}-${String(
-          selectedMonth.getMonth() + 1
-        ).padStart(
-          2,
-          "0"
-        )}-01`,
-      [selectedMonth]
-    );
-
-  const monthEnd =
-    useMemo(() => {
-      const end =
-        new Date(
-          selectedMonth.getFullYear(),
-          selectedMonth.getMonth() +
-            1,
-          0
-        );
-
-      return `${end.getFullYear()}-${String(
-        end.getMonth() + 1
-      ).padStart(
-        2,
-        "0"
-      )}-${String(
-        end.getDate()
-      ).padStart(
-        2,
-        "0"
-      )}`;
-    }, [selectedMonth]);
-
-  const monthLabel =
-    selectedMonth.toLocaleDateString(
-      "pt-BR",
-      {
-        month: "long",
-        year: "numeric",
-      }
-    );
+        return data ?? [];
+      },
+    });
 
   const {
-    data: clients = [],
+    data: appointments = [],
+    isLoading: loadingAppointments,
   } = useQuery({
     queryKey: [
-      "studio-clients",
+      "studio-dashboard-appointments",
       household?.id,
+      monthStart,
+      monthEnd,
     ],
-    enabled:
-      Boolean(
-        household?.id
-      ),
+    enabled: Boolean(household?.id),
     queryFn: async () => {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from(
-          "studio_clients"
-        )
+      const { data, error } = await supabase
+        .from("studio_appointments")
         .select(
-          "id, name, phone"
+          `
+          id,
+          service_name,
+          total_amount,
+          received_amount,
+          scheduled_date,
+          scheduled_time,
+          status,
+          studio_clients(name)
+        `
         )
-        .eq(
-          "household_id",
-          household!.id
-        )
-        .order("name");
+        .eq("household_id", household!.id)
+        .gte("scheduled_date", monthStart)
+        .lte("scheduled_date", monthEnd)
+        .neq("status", "cancelado")
+        .order("scheduled_date", { ascending: true })
+        .order("scheduled_time", { ascending: true });
+
+      if (error) throw error;
+
+      return (data ?? []) as Appointment[];
+    },
+  });
+
+  const { data: services = [] } = useQuery({
+    queryKey: ["studio-dashboard-services", household?.id],
+    enabled: Boolean(household?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("studio_services")
+        .select("id")
+        .eq("household_id", household!.id)
+        .eq("active", true);
 
       if (error) throw error;
 
@@ -413,2338 +151,394 @@ function AgendaPage() {
     },
   });
 
-  const {
-    data: services = [],
-  } = useQuery({
-    queryKey: [
-      "studio-services",
-      household?.id,
-    ],
-    enabled:
-      Boolean(
-        household?.id
-      ),
+  const { data: birthdayClients = [] } = useQuery({
+    queryKey: ["studio-birthdays", household?.id],
+    enabled: Boolean(household?.id),
     queryFn: async () => {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from(
-          "studio_services"
-        )
-        .select(
-          "id, name, default_price"
-        )
-        .eq(
-          "household_id",
-          household!.id
-        )
-        .eq(
-          "active",
-          true
-        )
-        .order("name");
+      const { data, error } = await supabase
+        .from("studio_clients")
+        .select("id, name, birth_date")
+        .eq("household_id", household?.id ?? "")
+        .not("birth_date", "is", null);
 
       if (error) throw error;
-
-      return (
-        data ?? []
-      ) as Service[];
+      return (data ?? []) as BirthdayClient[];
     },
   });
 
-  const {
-    data: appointments = [],
-    isLoading,
-  } = useQuery({
-    queryKey: [
-      "studio-appointments",
-      household?.id,
-      monthStart,
-      monthEnd,
-    ],
-    enabled:
-      Boolean(
-        household?.id
+  const birthdays = birthdayClients
+    .flatMap((client) => {
+      const [, month, day] = client.birth_date.split("-").map(Number);
+      if (!month || !day) return [];
+      let nextDate = new Date(today.getFullYear(), month - 1, day);
+      const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (nextDate < startToday) nextDate = new Date(today.getFullYear() + 1, month - 1, day);
+      const daysUntil = Math.round((nextDate.getTime() - startToday.getTime()) / 86_400_000);
+      return [{ ...client, nextDate, daysUntil }];
+    })
+    .filter((client) => client.daysUntil <= 30)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+
+  const birthdaysToday = birthdays.filter((client) => client.daysUntil === 0);
+  const upcomingBirthdays = birthdays.filter((client) => client.daysUntil > 0);
+
+  const received = transactions
+    .filter(
+      (item) =>
+        item.type === "income" &&
+        item.status !== "pending"
+    )
+    .reduce((sum, item) => sum + Number(item.amount), 0);
+
+  const expenses = transactions
+    .filter(
+      (item) =>
+        item.type === "expense" &&
+        item.status !== "pending"
+    )
+    .reduce((sum, item) => sum + Number(item.amount), 0);
+
+  const pendingTransactions = transactions
+    .filter(
+      (item) =>
+        item.type === "income" &&
+        item.status === "pending"
+    )
+    .reduce((sum, item) => sum + Number(item.amount), 0);
+
+  const appointmentPending = appointments.reduce(
+    (sum, appointment) =>
+      sum +
+      Math.max(
+        Number(appointment.total_amount) -
+          Number(appointment.received_amount),
+        0
       ),
-    queryFn: async () => {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from(
-          "studio_appointments"
-        )
-        .select(
-          `
-          id,
-          client_id,
-          service_id,
-          service_name,
-          total_amount,
-          deposit_amount,
-          received_amount,
-          scheduled_date,
-          scheduled_time,
-          status,
-          studio_clients(name, phone)
-        `
-        )
-        .eq(
-          "household_id",
-          household!.id
-        )
-        .gte(
-          "scheduled_date",
-          monthStart
-        )
-        .lte(
-          "scheduled_date",
-          monthEnd
-        )
-        .neq(
-          "status",
-          "cancelado"
-        )
-        .order(
-          "scheduled_date",
-          {
-            ascending: true,
-          }
-        )
-        .order(
-          "scheduled_time",
-          {
-            ascending: true,
-          }
-        );
+    0
+  );
 
-      if (error) throw error;
+  const totalPending = pendingTransactions + appointmentPending;
+  const balance = received - expenses;
 
-      return (
-        data ?? []
-      ) as Appointment[];
-    },
-  });
+  const todayAppointments = appointments.filter(
+    (appointment) =>
+      appointment.scheduled_date ===
+      today.toISOString().slice(0, 10)
+  );
 
-  const selectedDayAppointments =
-    useMemo(
-      () =>
-        appointments
-          .filter(
-            (appointment) =>
-              appointment.scheduled_date ===
-              selectedDay
-          )
-          .sort(
-            (a, b) => {
-              const aTime =
-                timeToMinutes(
-                  a.scheduled_time
-                ) ?? 0;
+  const upcomingAppointments = appointments
+    .filter(
+      (appointment) =>
+        appointment.scheduled_date >=
+        today.toISOString().slice(0, 10)
+    )
+    .slice(0, 3);
 
-              const bTime =
-                timeToMinutes(
-                  b.scheduled_time
-                ) ?? 0;
-
-              return (
-                aTime - bTime
-              );
-            }
-          ),
-      [
-        appointments,
-        selectedDay,
-      ]
-    );
-
-  function parseMoney(
-    value: string
-  ) {
-    return (
-      Number(
-        value
-          .replace(
-            /\./g,
-            ""
-          )
-          .replace(
-            ",",
-            "."
-          )
-      ) || 0
-    );
+  function money(value: number) {
+    return value.toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+    });
   }
 
-  function formatMoney(
-    value: number
-  ) {
-    return value.toLocaleString(
-      "pt-BR",
-      {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }
-    );
-  }
-
-  function getServiceDuration(
-    id: string
-  ) {
-    return (
-      serviceMetadata[id]
-        ?.duration_minutes ||
-      60
-    );
-  }
-
-  function getAppointmentServiceList(
-    appointment: Appointment
-  ) {
-    const saved =
-      appointmentServices[
-        appointment.id
-      ];
-
-    if (
-      saved &&
-      saved.length > 0
-    ) {
-      return saved;
+  function getClientName(appointment: Appointment) {
+    if (Array.isArray(appointment.studio_clients)) {
+      return appointment.studio_clients[0]?.name ?? "Cliente";
     }
 
-    if (
-      appointment.service_id
-    ) {
-      const service =
-        services.find(
-          (item) =>
-            item.id ===
-            appointment.service_id
-        );
-
-      if (service) {
-        return [
-          {
-            id: service.id,
-            name:
-              service.name,
-            price:
-              Number(
-                appointment.total_amount
-              ),
-            duration:
-              getServiceDuration(
-                service.id
-              ),
-          },
-        ];
-      }
-    }
-
-    return [
-      {
-        id:
-          appointment.service_id ??
-          "legacy",
-        name:
-          appointment.service_name,
-        price:
-          Number(
-            appointment.total_amount
-          ),
-        duration: 60,
-      },
-    ];
+    return appointment.studio_clients?.name ?? "Cliente";
   }
 
-  function getDuration(
-    appointment: Appointment
-  ) {
-    return getAppointmentServiceList(
-      appointment
-    ).reduce(
-      (
-        total,
-        service
-      ) =>
-        total +
-        service.duration,
-      0
-    );
-  }
-
-  function getSelectedTotal() {
-    return selectedServices.reduce(
-      (
-        total,
-        service
-      ) =>
-        total +
-        service.price,
-      0
-    );
-  }
-
-  function getSelectedDuration() {
-    return selectedServices.reduce(
-      (
-        total,
-        service
-      ) =>
-        total +
-        service.duration,
-      0
-    );
-  }
-
-  function previousMonth() {
-    const next =
-      new Date(
-        selectedMonth.getFullYear(),
-        selectedMonth.getMonth() -
-          1,
-        1
-      );
-
-    setSelectedMonth(
-      next
-    );
-
-    setSelectedDay(
-      dateToKey(next)
-    );
-  }
-
-  function nextMonth() {
-    const next =
-      new Date(
-        selectedMonth.getFullYear(),
-        selectedMonth.getMonth() +
-          1,
-        1
-      );
-
-    setSelectedMonth(
-      next
-    );
-
-    setSelectedDay(
-      dateToKey(next)
-    );
-  }
-
-  function goToToday() {
-    const current =
-      new Date();
-
-    setSelectedMonth(
-      new Date(
-        current.getFullYear(),
-        current.getMonth(),
-        1
-      )
-    );
-
-    setSelectedDay(
-      dateToKey(current)
-    );
-  }
-
-  function openNew(
-    dateValue?: string,
-    timeValue?: string
-  ) {
-    const appointmentDate =
-      dateValue ??
-      selectedDay ??
-      dateToKey(today);
-
-    setEditing(null);
-    setClientId("");
-    setSelectedServices(
-      []
-    );
-    setServiceToAdd("");
-    setDeposit("");
-    setDate(
-      appointmentDate
-    );
-    setTime(
-      timeValue ?? ""
-    );
-    setShowForm(true);
-  }
-
-  function openEdit(
-    appointment: Appointment
-  ) {
-    const savedServices =
-      getAppointmentServiceList(
-        appointment
-      );
-
-    setEditing(
-      appointment
-    );
-
-    setClientId(
-      appointment.client_id ??
-        ""
-    );
-
-    setSelectedServices(
-      savedServices
-    );
-
-    setServiceToAdd("");
-
-    setDeposit(
-      formatMoney(
-        Number(
-          appointment.deposit_amount
-        )
-      )
-    );
-
-    setDate(
-      appointment.scheduled_date
-    );
-
-    setTime(
-      appointment.scheduled_time
-        ?.slice(0, 5) ??
-        ""
-    );
-
-    setShowForm(true);
-  }
-
-  function closeForm() {
-    if (saving) return;
-
-    setShowForm(false);
-    setEditing(null);
-    setSelectedServices(
-      []
-    );
-    setServiceToAdd("");
-  }
-
-  function addService() {
-    if (!serviceToAdd) {
-      return;
-    }
-
-    const service =
-      services.find(
-        (item) =>
-          item.id ===
-          serviceToAdd
-      );
-
-    if (!service) {
-      return;
-    }
-
-    const alreadyAdded =
-      selectedServices.some(
-        (item) =>
-          item.id ===
-          service.id
-      );
-
-    if (alreadyAdded) {
-      alert(
-        "Este serviço já foi adicionado."
-      );
-      return;
-    }
-
-    setSelectedServices(
-      [
-        ...selectedServices,
-        {
-          id: service.id,
-          name:
-            service.name,
-          price:
-            Number(
-              service.default_price
-            ),
-          duration:
-            getServiceDuration(
-              service.id
-            ),
-        },
-      ]
-    );
-
-    setServiceToAdd("");
-  }
-
-  function removeService(
-    serviceId: string
-  ) {
-    setSelectedServices(
-      (current) =>
-        current.filter(
-          (service) =>
-            service.id !==
-            serviceId
-        )
-    );
-  }
-
-  function hasConflict(
-    startTime: string,
-    appointmentDate: string,
-    appointmentDuration: number,
-    ignoreId?: string
-  ) {
-    const newStart =
-      timeToMinutes(
-        startTime
-      );
-
-    if (
-      newStart ===
-      null
-    ) {
-      return false;
-    }
-
-    const newEnd =
-      newStart +
-      appointmentDuration;
-
-    return appointments.some(
-      (appointment) => {
-        if (
-          appointment.id ===
-          ignoreId
-        ) {
-          return false;
-        }
-
-        if (
-          appointment.scheduled_date !==
-          appointmentDate
-        ) {
-          return false;
-        }
-
-        if (
-          !appointment.scheduled_time
-        ) {
-          return false;
-        }
-
-        const existingStart =
-          timeToMinutes(
-            appointment.scheduled_time
-          );
-
-        if (
-          existingStart ===
-          null
-        ) {
-          return false;
-        }
-
-        const existingEnd =
-          existingStart +
-          getDuration(
-            appointment
-          );
-
-        return (
-          newStart <
-            existingEnd &&
-          newEnd >
-            existingStart
-        );
-      }
-    );
-  }
-
-  async function saveAppointment() {
-    if (
-      !household?.id ||
-      !clientId ||
-      !date ||
-      !time
-    ) {
-      alert(
-        "Preencha cliente, data e horário."
-      );
-      return;
-    }
-
-    if (
-      selectedServices.length ===
-      0
-    ) {
-      alert(
-        "Adicione pelo menos um serviço."
-      );
-      return;
-    }
-
-    const totalAmount =
-      getSelectedTotal();
-
-    const totalDuration =
-      getSelectedDuration();
-
-    if (
-      !totalDuration
-    ) {
-      alert(
-        "A duração dos serviços precisa ser válida."
-      );
-      return;
-    }
-
-    if (
-      hasConflict(
-        time,
-        date,
-        totalDuration,
-        editing?.id
-      )
-    ) {
-      alert(
-        "Este horário já está ocupado por outro atendimento. Escolha outro horário."
-      );
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const {
-        data: {
-          user,
-        },
-      } =
-        await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error(
-          "Usuário não autenticado."
-        );
-      }
-
-      const depositAmount =
-        Math.min(
-          parseMoney(
-            deposit
-          ),
-          totalAmount
-        );
-
-      const serviceName =
-        selectedServices
-          .map(
-            (service) =>
-              service.name
-          )
-          .join(" + ");
-
-      let appointmentId =
-        editing?.id;
-
-      if (editing) {
-        const {
-          error,
-        } = await supabase
-          .from(
-            "studio_appointments"
-          )
-          .update({
-            client_id:
-              clientId,
-            service_id:
-              selectedServices[0]
-                ?.id ??
-              null,
-            service_name:
-              serviceName,
-            total_amount:
-              totalAmount,
-            deposit_amount:
-              depositAmount,
-            received_amount:
-              depositAmount,
-            scheduled_date:
-              date,
-            scheduled_time:
-              time,
-          })
-          .eq(
-            "id",
-            editing.id
-          )
-          .eq(
-            "household_id",
-            household.id
-          );
-
-        if (error) {
-          throw error;
-        }
-      } else {
-        const {
-          data,
-          error,
-        } = await supabase
-          .from(
-            "studio_appointments"
-          )
-          .insert({
-            household_id:
-              household.id,
-            created_by:
-              user.id,
-            client_id:
-              clientId,
-            service_id:
-              selectedServices[0]
-                ?.id ??
-              null,
-            service_name:
-              serviceName,
-            total_amount:
-              totalAmount,
-            deposit_amount:
-              depositAmount,
-            received_amount:
-              depositAmount,
-            scheduled_date:
-              date,
-            scheduled_time:
-              time,
-            status:
-              "agendado",
-          })
-          .select("id")
-          .single();
-
-        if (error) {
-          throw error;
-        }
-
-        appointmentId =
-          data.id;
-      }
-
-      if (
-        appointmentId
-      ) {
-        const current =
-          loadAppointmentServices(
-            household.id
-          );
-
-        current[
-          appointmentId
-        ] =
-          selectedServices;
-
-        saveAppointmentServices(
-          household.id,
-          current
-        );
-      }
-
-      await queryClient.invalidateQueries(
-        {
-          queryKey: [
-            "studio-appointments",
-          ],
-        }
-      );
-
-      setSelectedDay(
-        date
-      );
-
-      setSelectedMonth(
-        new Date(
-          `${date}T12:00:00`
-        )
-      );
-
-      closeForm();
-    } catch (error) {
-      console.error(
-        error
-      );
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível salvar o agendamento."
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function deleteAppointment(
-    appointment: Appointment
-  ) {
-    const confirmed =
-      window.confirm(
-        "Excluir este agendamento?"
-      );
-
-    if (
-      !confirmed ||
-      !household?.id
-    ) {
-      return;
-    }
-
-    try {
-      const {
-        error,
-      } = await supabase
-        .from(
-          "studio_appointments"
-        )
-        .delete()
-        .eq(
-          "id",
-          appointment.id
-        )
-        .eq(
-          "household_id",
-          household.id
-        );
-
-      if (error) {
-        throw error;
-      }
-
-      const current =
-        loadAppointmentServices(
-          household.id
-        );
-
-      delete current[
-        appointment.id
-      ];
-
-      saveAppointmentServices(
-        household.id,
-        current
-      );
-
-      await queryClient.invalidateQueries(
-        {
-          queryKey: [
-            "studio-appointments",
-          ],
-        }
-      );
-    } catch (error) {
-      console.error(
-        error
-      );
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível excluir o agendamento."
-      );
-    }
-  }
-
-  function openWhatsApp(
-    appointment: Appointment
-  ) {
-    const client =
-      getClient(
-        appointment
-      );
-
-    if (!client?.phone) {
-      alert(
-        "Cadastre o WhatsApp da cliente primeiro."
-      );
-      return;
-    }
-
-    const phone =
-      client.phone.replace(
-        /\D/g,
-        ""
-      );
-
-    const dateFormatted =
-      new Date(
-        `${appointment.scheduled_date}T12:00:00`
-      ).toLocaleDateString(
-        "pt-BR"
-      );
-
-    const message =
-      `Olá, ${client.name}! 💕\n\n` +
-      `Gostaríamos de confirmar seu agendamento:\n` +
-      `📅 Data: ${dateFormatted}\n` +
-      `⏰ Horário: ${
-        appointment.scheduled_time?.slice(
-          0,
-          5
-        ) ??
-        "a confirmar"
-      }\n` +
-      `✨ Serviço: ${appointment.service_name}\n\n` +
-      `Pedimos, por favor, que chegue 5 minutos antes do horário agendado.\n\n` +
-      `Será um prazer receber você!\n` +
-      `Studio Lary Andrade`;
-
-    window.open(
-      `https://wa.me/${phone}?text=${encodeURIComponent(
-        message
-      )}`,
-      "_blank"
-    );
-  }
-
-  async function finalizeAppointment(
-    appointment: Appointment
-  ) {
-    if (!household?.id) {
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        `Finalizar o atendimento de ${
-          getClient(
-            appointment
-          )?.name ??
-          "cliente"
-        } e marcar como pago?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const {
-        error,
-      } = await supabase
-        .from(
-          "studio_appointments"
-        )
-        .update({
-          status:
-            "concluido",
-          received_amount:
-            Number(
-              appointment.total_amount
-            ),
-        })
-        .eq(
-          "id",
-          appointment.id
-        )
-        .eq(
-          "household_id",
-          household.id
-        );
-
-      if (error) {
-        throw error;
-      }
-
-      await queryClient.invalidateQueries(
-        {
-          queryKey: [
-            "studio-appointments",
-          ],
-        }
-      );
-
-      await queryClient.invalidateQueries(
-        {
-          queryKey: [
-            "studio-finance",
-          ],
-        }
-      );
-    } catch (error) {
-      console.error(
-        error
-      );
-
-      alert(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível finalizar o atendimento."
-      );
-    }
+  async function signOut() {
+    await supabase.auth.signOut();
   }
 
   return (
     <AppShell
-      title="Agenda"
-      subtitle="Seus próximos atendimentos"
+      title="Olá, Lary 💕"
+      subtitle={`Resumo de ${monthLabel}`}
       action={
         <button
           type="button"
-          onClick={() =>
-            openNew()
-          }
-          className="flex size-10 items-center justify-center rounded-full bg-[#b7838e] text-white shadow-sm active:scale-95"
-          aria-label="Novo agendamento"
+          onClick={signOut}
+          className="flex size-10 items-center justify-center rounded-full border border-black/[0.06] bg-white text-[#817b7d]"
+          aria-label="Sair"
         >
-          <Plus
-            className="size-4.5"
-            strokeWidth={1.9}
-          />
+          <LogOut className="size-4" strokeWidth={1.7} />
         </button>
       }
     >
-      <div className="rounded-2xl border border-black/[0.05] bg-white p-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={
-              previousMonth
-            }
-            className="flex size-9 items-center justify-center rounded-full text-[#817b7d] hover:bg-[#f7f3f4]"
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft
-              className="size-5"
-              strokeWidth={1.6}
-            />
-          </button>
-
-          <button
-            type="button"
-            onClick={
-              goToToday
-            }
-            className="text-center"
-          >
-            <p className="text-sm font-semibold capitalize text-[#211f20]">
-              {monthLabel}
-            </p>
-
-            <p className="mt-0.5 text-[9px] uppercase tracking-[0.16em] text-[#aaa5a6]">
-              {appointments.length}{" "}
-              {appointments.length ===
-              1
-                ? "atendimento"
-                : "atendimentos"}
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={
-              nextMonth
-            }
-            className="flex size-9 items-center justify-center rounded-full text-[#817b7d] hover:bg-[#f7f3f4]"
-            aria-label="Próximo mês"
-          >
-            <ChevronRight
-              className="size-5"
-              strokeWidth={1.6}
-            />
-          </button>
-        </div>
-
-        <div className="mt-3 flex rounded-xl bg-[#f3e5e8] p-1">
-          <button
-            type="button"
-            onClick={() =>
-              setViewMode(
-                "dia"
-              )
-            }
-            className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
-              viewMode ===
-              "dia"
-                ? "bg-white text-[#9d6875] shadow-sm"
-                : "text-[#817b7d]"
-            }`}
-          >
-            Dia
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              setViewMode(
-                "mes"
-              )
-            }
-            className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
-              viewMode ===
-              "mes"
-                ? "bg-white text-[#9d6875] shadow-sm"
-                : "text-[#817b7d]"
-            }`}
-          >
-            Mês
-          </button>
-        </div>
-      </div>
-
-      <section className="mt-5">
-        {isLoading ? (
-          <div className="rounded-2xl border border-black/[0.05] bg-white px-4 py-8 text-center text-sm text-[#817b7d]">
-            Carregando agenda...
+      {birthdaysToday.map((client) => (
+        <Link
+          key={client.id}
+          to="/clientes"
+          hash={`cliente-${client.id}`}
+          className="mb-3 flex items-center gap-3 rounded-2xl bg-[#f3e5e8] p-4 text-[#9d6875]"
+        >
+          <Cake className="size-5 shrink-0" strokeWidth={1.7} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[#211f20]">Hoje é aniversário de {client.name}! 🎂</p>
+            <p className="mt-1 text-xs text-[#8d6871]">Toque para abrir o cadastro da cliente</p>
           </div>
-        ) : viewMode ===
-          "mes" ? (
-          <MonthCalendar
-            selectedMonth={
-              selectedMonth
-            }
-            appointments={
-              appointments
-            }
-            onSelectDate={(
-              dateValue
-            ) => {
-              setSelectedDay(
-                dateValue
-              );
+          <ChevronRight className="size-4 shrink-0" />
+        </Link>
+      ))}
 
-              setViewMode(
-                "dia"
-              );
-            }}
-          />
+      {upcomingBirthdays.length > 0 && (
+        <section className="mb-5 rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-[#9d6875]">
+            <Cake className="size-4" strokeWidth={1.7} />
+            <h2 className="text-sm font-semibold text-[#211f20]">Próximos aniversários</h2>
+          </div>
+          <div className="mt-3 space-y-2">
+            {upcomingBirthdays.slice(0, 3).map((client) => (
+              <Link
+                key={client.id}
+                to="/clientes"
+                hash={`cliente-${client.id}`}
+                className="flex items-center justify-between gap-3 text-xs"
+              >
+                <span className="truncate font-medium text-[#625d5f]">{client.name}</span>
+                <span className="shrink-0 text-[#817b7d]">
+                  {client.nextDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* RESUMO PRINCIPAL */}
+      <section className="rounded-[26px] bg-[#b7838e] p-5 text-white shadow-sm">
+        <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/70">
+          Saldo do mês
+        </p>
+
+        <p className="mt-2 text-3xl font-semibold tracking-tight">
+          {loadingFinance ? "—" : `R$ ${money(balance)}`}
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/20 pt-4">
+          <div>
+            <p className="text-[11px] text-white/70">
+              Recebido
+            </p>
+            <p className="mt-1 text-base font-semibold">
+              R$ {money(received)}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[11px] text-white/70">
+              Gastos
+            </p>
+            <p className="mt-1 text-base font-semibold">
+              R$ {money(expenses)}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* CARDS SECUNDÁRIOS */}
+      <section className="mt-3 grid grid-cols-2 gap-3">
+        <Link
+          to="/movimentacoes"
+          className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
+        >
+          <div className="flex items-center gap-2 text-[#9d6875]">
+            <WalletCards
+              className="size-4"
+              strokeWidth={1.7}
+            />
+            <span className="text-xs font-medium">
+              A receber
+            </span>
+          </div>
+
+          <p className="mt-3 text-xl font-semibold text-[#211f20]">
+            R$ {money(totalPending)}
+          </p>
+
+          <p className="mt-1 text-[10px] text-[#817b7d]">
+            Valores ainda não recebidos
+          </p>
+        </Link>
+
+        <Link
+          to="/agenda"
+          className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
+        >
+          <div className="flex items-center gap-2 text-[#9d6875]">
+            <CalendarDays
+              className="size-4"
+              strokeWidth={1.7}
+            />
+            <span className="text-xs font-medium">
+              Hoje
+            </span>
+          </div>
+
+          <p className="mt-3 text-xl font-semibold text-[#211f20]">
+            {todayAppointments.length}
+          </p>
+
+          <p className="mt-1 text-[10px] text-[#817b7d]">
+            {todayAppointments.length === 1
+              ? "atendimento hoje"
+              : "atendimentos hoje"}
+          </p>
+        </Link>
+      </section>
+
+      {/* AÇÕES RÁPIDAS */}
+      <section className="mt-7">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[#211f20]">
+            Acesso rápido
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            to="/agenda"
+            className="flex items-center gap-3 rounded-2xl bg-[#f3e5e8] p-4 text-[#9d6875]"
+          >
+            <CalendarDays
+              className="size-5"
+              strokeWidth={1.6}
+            />
+
+            <div>
+              <p className="text-sm font-semibold">
+                Agenda
+              </p>
+              <p className="mt-0.5 text-[10px] text-[#8d6871]">
+                Ver atendimentos
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            to="/servicos"
+            className="flex items-center gap-3 rounded-2xl bg-white p-4 text-[#9d6875] shadow-sm ring-1 ring-black/[0.04]"
+          >
+            <Sparkles
+              className="size-5"
+              strokeWidth={1.6}
+            />
+
+            <div>
+              <p className="text-sm font-semibold text-[#211f20]">
+                Serviços
+              </p>
+              <p className="mt-0.5 text-[10px] text-[#817b7d]">
+                {services.length} cadastrados
+              </p>
+            </div>
+          </Link>
+        </div>
+      </section>
+
+      {/* PRÓXIMOS ATENDIMENTOS */}
+      <section className="mt-7">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-[#211f20]">
+              Próximos atendimentos
+            </h2>
+
+            <p className="mt-1 text-xs text-[#817b7d]">
+              Sua agenda mais próxima
+            </p>
+          </div>
+
+          <Link
+            to="/agenda"
+            className="flex items-center gap-1 text-xs font-medium text-[#9d6875]"
+          >
+            Ver agenda
+            <ChevronRight className="size-3" />
+          </Link>
+        </div>
+
+        {loadingAppointments ? (
+          <div className="rounded-2xl bg-white px-4 py-7 text-center text-sm text-[#817b7d]">
+            Carregando...
+          </div>
+        ) : upcomingAppointments.length === 0 ? (
+          <EmptyState text="Nenhum atendimento próximo." />
         ) : (
-          <DaySchedule
-            selectedDay={
-              selectedDay
-            }
-            appointments={
-              selectedDayAppointments
-            }
-            getDuration={
-              getDuration
-            }
-            getAppointmentServices={
-              getAppointmentServiceList
-            }
-            onSelectTime={(
-              timeValue
-            ) =>
-              openNew(
-                selectedDay,
-                timeValue
-              )
-            }
-            onEdit={
-              openEdit
-            }
-            onDelete={
-              deleteAppointment
-            }
-            onWhatsApp={
-              openWhatsApp
-            }
-            onFinalize={
-              finalizeAppointment
-            }
-          />
+          <div className="space-y-2">
+            {upcomingAppointments.map((appointment) => (
+              <div
+                key={appointment.id}
+                className="rounded-2xl border border-black/[0.05] bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 shrink-0 flex-col items-center justify-center rounded-xl bg-[#f3e5e8] text-[#9d6875]">
+                    <span className="text-[9px] uppercase">
+                      {new Date(
+                        `${appointment.scheduled_date}T12:00:00`
+                      ).toLocaleDateString("pt-BR", {
+                        weekday: "short",
+                      })}
+                    </span>
+
+                    <span className="text-sm font-semibold leading-none">
+                      {new Date(
+                        `${appointment.scheduled_date}T12:00:00`
+                      ).getDate()}
+                    </span>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[#211f20]">
+                      {getClientName(appointment)}
+                    </p>
+
+                    <p className="mt-1 truncate text-xs text-[#817b7d]">
+                      {appointment.service_name}
+                      {appointment.scheduled_time
+                        ? ` · ${appointment.scheduled_time.slice(
+                            0,
+                            5
+                          )}`
+                        : ""}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-[#211f20]">
+                      R${" "}
+                      {money(
+                        Number(appointment.total_amount)
+                      )}
+                    </p>
+
+                    <p className="mt-1 text-[10px] text-[#9d6875]">
+                      A receber R${" "}
+                      {money(
+                        Math.max(
+                          Number(appointment.total_amount) -
+                            Number(
+                              appointment.received_amount
+                            ),
+                          0
+                        )
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-5">
-          <div className="w-full max-w-md rounded-t-3xl bg-[#faf9f8] p-5 shadow-2xl sm:rounded-3xl">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[#aaa5a6]">
-                  Studio Lary Andrade
-                </p>
-
-                <h2 className="mt-1 text-xl font-semibold text-[#211f20]">
-                  {editing
-                    ? "Editar atendimento"
-                    : "Novo atendimento"}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={
-                  closeForm
-                }
-                className="flex size-9 items-center justify-center rounded-full bg-white text-[#817b7d]"
-                aria-label="Fechar"
-              >
-                <X
-                  className="size-4"
-                  strokeWidth={1.7}
-                />
-              </button>
-            </div>
-
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto pb-2">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Cliente
-                </label>
-
-                <div className="relative">
-                  <UserRound
-                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#aaa5a6]"
-                    strokeWidth={1.6}
-                  />
-
-                  <select
-                    value={
-                      clientId
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setClientId(
-                        event
-                          .target
-                          .value
-                      )
-                    }
-                    className="h-11 w-full appearance-none rounded-xl border border-black/[0.08] bg-white pl-10 pr-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                  >
-                    <option value="">
-                      Selecione a cliente
-                    </option>
-
-                    {clients.map(
-                      (
-                        client
-                      ) => (
-                        <option
-                          key={
-                            client.id
-                          }
-                          value={
-                            client.id
-                          }
-                        >
-                          {
-                            client.name
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              {/* SERVIÇOS */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Serviços
-                </label>
-
-                {selectedServices.length >
-                  0 && (
-                  <div className="mb-2 space-y-2">
-                    {selectedServices.map(
-                      (
-                        service
-                      ) => (
-                        <div
-                          key={
-                            service.id
-                          }
-                          className="flex items-center gap-3 rounded-xl border border-[#b7838e]/15 bg-[#f3e5e8] px-3 py-2.5"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-[#211f20]">
-                              {
-                                service.name
-                              }
-                            </p>
-
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="text-[10px] text-[#817b7d]">
-                                {formatDuration(
-                                  service.duration
-                                )}
-                              </span>
-
-                              <span className="text-[10px] text-[#9d6875]">
-                                R${" "}
-                                {formatMoney(
-                                  service.price
-                                )}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeService(
-                                service.id
-                              )
-                            }
-                            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white text-[#9d6875]"
-                            aria-label={`Remover ${service.name}`}
-                          >
-                            <X
-                              className="size-3.5"
-                              strokeWidth={
-                                1.8
-                              }
-                            />
-                          </button>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <select
-                    value={
-                      serviceToAdd
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setServiceToAdd(
-                        event
-                          .target
-                          .value
-                      )
-                    }
-                    className="h-11 min-w-0 flex-1 rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                  >
-                    <option value="">
-                      {selectedServices.length >
-                      0
-                        ? "Adicionar outro serviço"
-                        : "Selecione um serviço"}
-                    </option>
-
-                    {services
-                      .filter(
-                        (
-                          service
-                        ) =>
-                          !selectedServices.some(
-                            (
-                              selected
-                            ) =>
-                              selected.id ===
-                              service.id
-                          )
-                      )
-                      .map(
-                        (
-                          service
-                        ) => (
-                          <option
-                            key={
-                              service.id
-                            }
-                            value={
-                              service.id
-                            }
-                          >
-                            {
-                              service.name
-                            }{" "}
-                            — R${" "}
-                            {formatMoney(
-                              Number(
-                                service.default_price
-                              )
-                            )}{" "}
-                            ·{" "}
-                            {formatDuration(
-                              getServiceDuration(
-                                service.id
-                              )
-                            )}
-                          </option>
-                        )
-                      )}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={
-                      addService
-                    }
-                    disabled={
-                      !serviceToAdd
-                    }
-                    className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-[#b7838e] px-4 text-xs font-semibold text-white disabled:opacity-40"
-                  >
-                    <Plus
-                      className="size-4"
-                      strokeWidth={
-                        1.8
-                      }
-                    />
-                    Adicionar
-                  </button>
-                </div>
-
-                {selectedServices.length >
-                  1 && (
-                  <p className="mt-2 text-[10px] text-[#817b7d]">
-                    Você pode combinar vários serviços no mesmo atendimento.
-                  </p>
-                )}
-              </div>
-
-              {/* RESUMO DOS SERVIÇOS */}
-              {selectedServices.length >
-                0 && (
-                <div className="rounded-2xl bg-[#f3e5e8] p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#817b7d]">
-                      Serviços
-                    </span>
-
-                    <strong className="text-xs text-[#9d6875]">
-                      {
-                        selectedServices.length
-                      }
-                    </strong>
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-[#817b7d]">
-                      Tempo total
-                    </span>
-
-                    <strong className="text-xs text-[#9d6875]">
-                      {formatDuration(
-                        getSelectedDuration()
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between border-t border-[#b7838e]/20 pt-2">
-                    <span className="text-xs font-medium text-[#625d5f]">
-                      Valor total
-                    </span>
-
-                    <strong className="text-sm text-[#211f20]">
-                      R${" "}
-                      {formatMoney(
-                        getSelectedTotal()
-                      )}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              {/* SINAL */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                  Sinal / valor recebido
-                </label>
-
-                <input
-                  value={
-                    deposit
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setDeposit(
-                      event
-                        .target
-                        .value
-                    )
-                  }
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  className="h-11 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                />
-              </div>
-
-              {/* DATA E HORA */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                    Data
-                  </label>
-
-                  <input
-                    type="date"
-                    value={
-                      date
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setDate(
-                        event
-                          .target
-                          .value
-                      )
-                    }
-                    className="h-11 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[#625d5f]">
-                    Horário
-                  </label>
-
-                  <input
-                    type="time"
-                    value={
-                      time
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setTime(
-                        event
-                          .target
-                          .value
-                      )
-                    }
-                    className="h-11 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm text-[#211f20] outline-none focus:border-[#b7838e]"
-                  />
-                </div>
-              </div>
-
-              {/* RESUMO FINANCEIRO */}
-              {selectedServices.length >
-                0 && (
-                <div className="rounded-2xl bg-[#f3e5e8] p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#817b7d]">
-                      Total
-                    </span>
-
-                    <strong className="text-sm text-[#211f20]">
-                      R${" "}
-                      {formatMoney(
-                        getSelectedTotal()
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-[#817b7d]">
-                      Recebido
-                    </span>
-
-                    <strong className="text-sm text-[#9d6875]">
-                      R${" "}
-                      {formatMoney(
-                        parseMoney(
-                          deposit
-                        )
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between border-t border-[#b7838e]/20 pt-2">
-                    <span className="text-xs font-medium text-[#625d5f]">
-                      A receber
-                    </span>
-
-                    <strong className="text-sm text-[#9d6875]">
-                      R${" "}
-                      {formatMoney(
-                        Math.max(
-                          0,
-                          getSelectedTotal() -
-                            parseMoney(
-                              deposit
-                            )
-                        )
-                      )}
-                    </strong>
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-[#817b7d]">
-                      Tempo ocupado
-                    </span>
-
-                    <strong className="text-xs text-[#9d6875]">
-                      {formatDuration(
-                        getSelectedDuration()
-                      )}
-                    </strong>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={
-                saveAppointment
-              }
-              disabled={
-                saving ||
-                selectedServices.length ===
-                  0
-              }
-              className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-[#b7838e] text-sm font-semibold text-white shadow-sm disabled:opacity-60"
-            >
-              {saving
-                ? "Salvando..."
-                : editing
-                  ? "Salvar alterações"
-                  : "Agendar atendimento"}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* RODAPÉ DISCRETO */}
+      <div className="mt-8 flex items-center justify-center gap-2 text-[10px] text-[#aaa5a6]">
+        <MoreVertical className="size-3" />
+        Studio Lary Andrade
+      </div>
     </AppShell>
-  );
-}
-
-function DaySchedule({
-  selectedDay,
-  appointments,
-  getDuration,
-  getAppointmentServices,
-  onSelectTime,
-  onEdit,
-  onDelete,
-  onWhatsApp,
-  onFinalize,
-}: {
-  selectedDay: string;
-  appointments: Appointment[];
-  getDuration: (
-    appointment: Appointment
-  ) => number;
-  getAppointmentServices: (
-    appointment: Appointment
-  ) => SelectedService[];
-  onSelectTime: (
-    time: string
-  ) => void;
-  onEdit: (
-    appointment: Appointment
-  ) => void;
-  onDelete: (
-    appointment: Appointment
-  ) => void;
-  onWhatsApp: (
-    appointment: Appointment
-  ) => void;
-  onFinalize: (
-    appointment: Appointment
-  ) => void;
-}) {
-  const selectedDate =
-    new Date(
-      `${selectedDay}T12:00:00`
-    );
-
-  const dateLabel =
-    selectedDate.toLocaleDateString(
-      "pt-BR",
-      {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-      }
-    );
-
-  const occupiedSlots =
-    new Set<number>();
-
-  appointments.forEach(
-    (appointment) => {
-      const start =
-        timeToMinutes(
-          appointment.scheduled_time
-        );
-
-      if (
-        start === null
-      ) {
-        return;
-      }
-
-      const duration =
-        getDuration(
-          appointment
-        );
-
-      const end =
-        start + duration;
-
-      for (
-        let minute = start;
-        minute < end;
-        minute += SLOT_MINUTES
-      ) {
-        occupiedSlots.add(
-          minute
-        );
-      }
-    }
-  );
-
-  const slots: number[] =
-    [];
-
-  for (
-    let minute =
-      DAY_START_HOUR * 60;
-    minute <=
-      DAY_END_HOUR * 60;
-    minute += SLOT_MINUTES
-  ) {
-    slots.push(
-      minute
-    );
-  }
-
-  function appointmentAt(
-    minute: number
-  ) {
-    return appointments.find(
-      (appointment) => {
-        const start =
-          timeToMinutes(
-            appointment.scheduled_time
-          );
-
-        return (
-          start !== null &&
-          start === minute
-        );
-      }
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between rounded-2xl bg-[#f3e5e8] px-4 py-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.15em] text-[#9d6875]">
-            Agenda do dia
-          </p>
-
-          <p className="mt-1 text-sm font-semibold capitalize text-[#211f20]">
-            {dateLabel}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            onSelectTime(
-              "09:00"
-            )
-          }
-          className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-[#9d6875]"
-        >
-          <Plus
-            className="size-3.5"
-            strokeWidth={1.8}
-          />
-          Agendar
-        </button>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white shadow-sm">
-        {slots.map(
-          (minute) => {
-            const appointment =
-              appointmentAt(
-                minute
-              );
-
-            const occupied =
-              occupiedSlots.has(
-                minute
-              );
-
-            if (
-              appointment
-            ) {
-              const client =
-                getClient(
-                  appointment
-                );
-
-              const duration =
-                getDuration(
-                  appointment
-                );
-
-              const services =
-                getAppointmentServices(
-                  appointment
-                );
-
-              const remaining =
-                Number(
-                  appointment.total_amount
-                ) -
-                Number(
-                  appointment.received_amount
-                );
-
-              return (
-                <div
-                  key={
-                    minute
-                  }
-                  className="border-b border-black/[0.05] last:border-b-0"
-                >
-                  <div className="flex min-h-[74px]">
-                    <div className="w-[62px] shrink-0 border-r border-black/[0.05] px-2 pt-3 text-center">
-                      <span className="text-xs font-semibold text-[#817b7d]">
-                        {minutesToTime(
-                          minute
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="flex-1 p-2">
-                      <div className="rounded-xl border border-[#b7838e]/20 bg-[#f3e5e8] p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#211f20]">
-                              {client?.name ??
-                                "Cliente"}
-                            </p>
-
-                            <div className="mt-2 space-y-1">
-                              {services.map(
-                                (
-                                  service
-                                ) => (
-                                  <p
-                                    key={
-                                      service.id
-                                    }
-                                    className="truncate text-xs text-[#817b7d]"
-                                  >
-                                    ✨{" "}
-                                    {
-                                      service.name
-                                    }
-                                  </p>
-                                )
-                              )}
-                            </div>
-
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span className="flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] text-[#817b7d]">
-                                <Clock3
-                                  className="size-3"
-                                  strokeWidth={
-                                    1.6
-                                  }
-                                />
-                                {formatDuration(
-                                  duration
-                                )}
-                              </span>
-
-                              <span className="text-[10px] text-[#9d6875]">
-                                R${" "}
-                                {Number(
-                                  appointment.total_amount
-                                ).toLocaleString(
-                                  "pt-BR",
-                                  {
-                                    minimumFractionDigits: 2,
-                                  }
-                                )}
-                              </span>
-                            </div>
-                          </div>
-
-                          {appointment.status ===
-                          "concluido" ? (
-                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#b7838e] text-white">
-                              <Check
-                                className="size-4"
-                                strokeWidth={
-                                  2
-                                }
-                              />
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onFinalize(
-                                  appointment
-                                )
-                              }
-                              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-[#9d6875] shadow-sm"
-                              aria-label="Finalizar atendimento"
-                            >
-                              <Check
-                                className="size-4"
-                                strokeWidth={
-                                  1.8
-                                }
-                              />
-                            </button>
-                          )}
-                        </div>
-
-                        {services.length >
-                          1 && (
-                          <div className="mt-2 rounded-lg bg-white/70 px-2 py-1.5">
-                            <p className="text-[9px] text-[#817b7d]">
-                              {services.length}{" "}
-                              serviços •{" "}
-                              {formatDuration(
-                                duration
-                              )}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="mt-3 grid grid-cols-3 gap-1.5 border-t border-[#b7838e]/15 pt-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onWhatsApp(
-                                appointment
-                              )
-                            }
-                            className="flex items-center justify-center gap-1 rounded-lg bg-white py-2 text-[10px] font-medium text-[#9d6875]"
-                          >
-                            <MessageCircle
-                              className="size-3"
-                              strokeWidth={
-                                1.7
-                              }
-                            />
-                            WhatsApp
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onEdit(
-                                appointment
-                              )
-                            }
-                            className="flex items-center justify-center gap-1 rounded-lg bg-white py-2 text-[10px] font-medium text-[#625d5f]"
-                          >
-                            <Pencil
-                              className="size-3"
-                              strokeWidth={
-                                1.7
-                              }
-                            />
-                            Editar
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onDelete(
-                                appointment
-                              )
-                            }
-                            className="flex items-center justify-center gap-1 rounded-lg bg-white py-2 text-[10px] font-medium text-[#b56f6f]"
-                          >
-                            <Trash2
-                              className="size-3"
-                              strokeWidth={
-                                1.7
-                              }
-                            />
-                            Excluir
-                          </button>
-                        </div>
-
-                        {remaining >
-                          0 &&
-                          appointment.status !==
-                            "concluido" && (
-                            <p className="mt-2 text-[9px] text-[#9d6875]">
-                              A receber: R${" "}
-                              {remaining.toLocaleString(
-                                "pt-BR",
-                                {
-                                  minimumFractionDigits: 2,
-                                }
-                              )}
-                            </p>
-                          )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {duration >
-                    SLOT_MINUTES && (
-                    <div className="flex min-h-[35px] border-t border-[#b7838e]/10 bg-[#faf7f7]">
-                      <div className="w-[62px] shrink-0 border-r border-black/[0.05] px-2 py-2 text-center text-[9px] text-[#aaa5a6]">
-                        até
-                      </div>
-
-                      <div className="flex items-center px-3 text-[9px] text-[#aaa5a6]">
-                        {minutesToTime(
-                          minute +
-                            duration
-                        )}{" "}
-                        • horário ocupado
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            const previousAppointment =
-              appointments.find(
-                (
-                  appointment
-                ) => {
-                  const start =
-                    timeToMinutes(
-                      appointment.scheduled_time
-                    );
-
-                  if (
-                    start ===
-                    null
-                  ) {
-                    return false;
-                  }
-
-                  const end =
-                    start +
-                    getDuration(
-                      appointment
-                    );
-
-                  return (
-                    minute >
-                      start &&
-                    minute <
-                      end
-                  );
-                }
-              );
-
-            if (
-              previousAppointment
-            ) {
-              return (
-                <div
-                  key={
-                    minute
-                  }
-                  className="flex min-h-[46px] border-b border-black/[0.04] bg-[#faf9f8]"
-                >
-                  <div className="w-[62px] shrink-0 border-r border-black/[0.05] px-2 py-3 text-center text-[10px] text-[#aaa5a6]">
-                    {minutesToTime(
-                      minute
-                    )}
-                  </div>
-
-                  <div className="flex flex-1 items-center px-3 text-[10px] text-[#aaa5a6]">
-                    Horário ocupado por{" "}
-                    {
-                      getClient(
-                        previousAppointment
-                      )?.name
-                    }
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <button
-                key={
-                  minute
-                }
-                type="button"
-                onClick={() =>
-                  onSelectTime(
-                    minutesToTime(
-                      minute
-                    )
-                  )
-                }
-                disabled={
-                  occupied
-                }
-                className="flex min-h-[54px] w-full border-b border-black/[0.04] text-left transition active:bg-[#f8eef0] disabled:cursor-not-allowed"
-              >
-                <div className="w-[62px] shrink-0 border-r border-black/[0.05] px-2 py-3 text-center text-[10px] font-medium text-[#817b7d]">
-                  {minutesToTime(
-                    minute
-                  )}
-                </div>
-
-                <div className="flex flex-1 items-center px-3">
-                  <span className="text-[10px] text-[#c1bbbc]">
-                    Horário livre
-                  </span>
-                </div>
-              </button>
-            );
-          }
-        )}
-      </div>
-    </div>
-  );
-}
-
-function MonthCalendar({
-  selectedMonth,
-  appointments,
-  onSelectDate,
-}: {
-  selectedMonth: Date;
-  appointments: Appointment[];
-  onSelectDate: (
-    date: string
-  ) => void;
-}) {
-  const year =
-    selectedMonth.getFullYear();
-
-  const month =
-    selectedMonth.getMonth();
-
-  const firstDay =
-    new Date(
-      year,
-      month,
-      1
-    ).getDay();
-
-  const daysInMonth =
-    new Date(
-      year,
-      month + 1,
-      0
-    ).getDate();
-
-  const totalCells =
-    Math.ceil(
-      (firstDay +
-        daysInMonth) /
-        7
-    ) * 7;
-
-  const cells =
-    Array.from(
-      {
-        length:
-          totalCells,
-      },
-      (_, index) => {
-        const day =
-          index -
-          firstDay +
-          1;
-
-        return day >=
-          1 &&
-          day <=
-            daysInMonth
-          ? day
-          : null;
-      }
-    );
-
-  const weekdays = [
-    "D",
-    "S",
-    "T",
-    "Q",
-    "Q",
-    "S",
-    "S",
-  ];
-
-  function dateKey(
-    day: number
-  ) {
-    return `${year}-${String(
-      month + 1
-    ).padStart(
-      2,
-      "0"
-    )}-${String(
-      day
-    ).padStart(
-      2,
-      "0"
-    )}`;
-  }
-
-  const todayKey =
-    dateToKey(
-      new Date()
-    );
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-black/[0.05] bg-white shadow-sm">
-      <div className="grid grid-cols-7 border-b border-black/[0.05]">
-        {weekdays.map(
-          (
-            weekday,
-            index
-          ) => (
-            <div
-              key={`${weekday}-${index}`}
-              className="py-3 text-center text-[9px] font-semibold uppercase tracking-[0.12em] text-[#aaa5a6]"
-            >
-              {weekday}
-            </div>
-          )
-        )}
-      </div>
-
-      <div className="grid grid-cols-7">
-        {cells.map(
-          (
-            day,
-            index
-          ) => {
-            if (!day) {
-              return (
-                <div
-                  key={`empty-${index}`}
-                  className="min-h-[100px] border-b border-r border-black/[0.04] bg-[#faf9f8]"
-                />
-              );
-            }
-
-            const key =
-              dateKey(day);
-
-            const dayAppointments =
-              appointments
-                .filter(
-                  (
-                    appointment
-                  ) =>
-                    appointment.scheduled_date ===
-                    key
-                )
-                .sort(
-                  (
-                    a,
-                    b
-                  ) =>
-                    (timeToMinutes(
-                      a.scheduled_time
-                    ) ??
-                      0) -
-                    (timeToMinutes(
-                      b.scheduled_time
-                    ) ??
-                      0)
-                );
-
-            const isToday =
-              key ===
-              todayKey;
-
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() =>
-                  onSelectDate(
-                    key
-                  )
-                }
-                className="min-h-[100px] border-b border-r border-black/[0.04] p-1.5 text-left transition active:bg-[#f8eef0]"
-              >
-                <div className="flex justify-center">
-                  <span
-                    className={`flex size-7 items-center justify-center rounded-full text-xs ${
-                      isToday
-                        ? "bg-[#b7838e] font-semibold text-white"
-                        : "text-[#211f20]"
-                    }`}
-                  >
-                    {day}
-                  </span>
-                </div>
-
-                <div className="mt-1 space-y-1">
-                  {dayAppointments
-                    .slice(
-                      0,
-                      3
-                    )
-                    .map(
-                      (
-                        appointment
-                      ) => {
-                        const client =
-                          getClient(
-                            appointment
-                          );
-
-                        return (
-                          <div
-                            key={
-                              appointment.id
-                            }
-                            className={`truncate rounded-md px-1.5 py-1 text-[8px] font-medium leading-none ${
-                              appointment.status ===
-                              "concluido"
-                                ? "bg-[#e9e1e3] text-[#817b7d]"
-                                : "bg-[#f3e5e8] text-[#9d6875]"
-                            }`}
-                          >
-                            {
-                              client?.name ??
-                              "Cliente"
-                            }
-                          </div>
-                        );
-                      }
-                    )}
-
-                  {dayAppointments.length >
-                    3 && (
-                    <p className="px-1 text-[8px] font-medium text-[#aaa5a6]">
-                      +
-                      {dayAppointments.length -
-                        3}{" "}
-                      mais
-                    </p>
-                  )}
-                </div>
-              </button>
-            );
-          }
-        )}
-      </div>
-
-      <div className="border-t border-black/[0.05] px-4 py-3 text-center text-[9px] uppercase tracking-[0.12em] text-[#aaa5a6]">
-        Toque em um dia para abrir os horários
-      </div>
-    </div>
   );
 }
