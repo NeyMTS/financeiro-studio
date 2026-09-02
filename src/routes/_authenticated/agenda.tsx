@@ -16,13 +16,13 @@ import {
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/hooks/use-household";
 import {
   AppShell,
-  EmptyState,
 } from "@/components/AppShell";
 
 export const Route = createFileRoute(
@@ -1773,6 +1773,100 @@ function AgendaPage() {
     }
   }
 
+  async function moveAppointment(
+    appointment: Appointment,
+    newTime: string
+  ) {
+    if (!household?.id) {
+      return;
+    }
+
+    const duration =
+      getDuration(
+        appointment
+      );
+
+    if (
+      hasConflict(
+        newTime,
+        appointment.scheduled_date,
+        duration,
+        appointment.id
+      )
+    ) {
+      alert(
+        "Este horário já está ocupado por outro atendimento ou compromisso."
+      );
+      return;
+    }
+
+    const start =
+      timeToMinutes(
+        newTime
+      );
+
+    if (
+      start === null
+    ) {
+      return;
+    }
+
+    if (
+      start +
+        duration >
+        DAY_END_HOUR *
+          60
+    ) {
+      alert(
+        `O atendimento precisa terminar até ${DAY_END_HOUR}:00.`
+      );
+      return;
+    }
+
+    try {
+      const {
+        error,
+      } = await supabase
+        .from(
+          "studio_appointments"
+        )
+        .update({
+          scheduled_time:
+            newTime,
+        })
+        .eq(
+          "id",
+          appointment.id
+        )
+        .eq(
+          "household_id",
+          household.id
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      await queryClient.invalidateQueries(
+        {
+          queryKey: [
+            "studio-appointments",
+          ],
+        }
+      );
+    } catch (error) {
+      console.error(
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível mover o atendimento."
+      );
+    }
+  }
+
   async function deleteAppointment(
     appointment: Appointment
   ) {
@@ -2166,6 +2260,9 @@ function AgendaPage() {
             }
             onFinalize={
               finalizeAppointment
+            }
+            onMove={
+              moveAppointment
             }
           />
         )}
@@ -2881,6 +2978,7 @@ function DaySchedule({
   onDeleteBlock,
   onWhatsApp,
   onFinalize,
+  onMove,
 }: {
   selectedDay: string;
   appointments: Appointment[];
@@ -2912,7 +3010,39 @@ function DaySchedule({
   onFinalize: (
     appointment: Appointment
   ) => void;
+  onMove: (
+    appointment: Appointment,
+    newTime: string
+  ) => void;
 }) {
+  const [
+    draggingAppointment,
+    setDraggingAppointment,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    dragOverTime,
+    setDragOverTime,
+  ] = useState<string | null>(
+    null
+  );
+
+  const longPressTimer =
+    useRef<ReturnType<
+      typeof setTimeout
+    > | null>(null);
+
+  const pointerStart =
+    useRef<{
+      x: number;
+      y: number;
+    } | null>(null);
+
+  const draggingRef =
+    useRef<string | null>(null);
+
   const selectedDate =
     new Date(
       `${selectedDay}T12:00:00`
@@ -2927,6 +3057,264 @@ function DaySchedule({
         month: "long",
       }
     );
+
+  function clearLongPress() {
+    if (
+      longPressTimer.current
+    ) {
+      clearTimeout(
+        longPressTimer.current
+      );
+
+      longPressTimer.current =
+        null;
+    }
+  }
+
+  function findDropTime(
+    clientX: number,
+    clientY: number
+  ) {
+    const element =
+      document.elementFromPoint(
+        clientX,
+        clientY
+      ) as HTMLElement | null;
+
+    const slot =
+      element?.closest(
+        "[data-agenda-drop-time]"
+      ) as HTMLElement | null;
+
+    return (
+      slot?.dataset
+        .agendaDropTime ??
+      null
+    );
+  }
+
+  useEffect(() => {
+    function handlePointerMove(
+      event: PointerEvent
+    ) {
+      if (
+        !draggingRef.current
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const dropTime =
+        findDropTime(
+          event.clientX,
+          event.clientY
+        );
+
+      setDragOverTime(
+        dropTime
+      );
+    }
+
+    function handlePointerUp(
+      event: PointerEvent
+    ) {
+      const appointmentId =
+        draggingRef.current;
+
+      if (!appointmentId) {
+        return;
+      }
+
+      const dropTime =
+        findDropTime(
+          event.clientX,
+          event.clientY
+        );
+
+      const appointment =
+        appointments.find(
+          (item) =>
+            item.id ===
+            appointmentId
+        );
+
+      if (
+        appointment &&
+        dropTime
+      ) {
+        const originalTime =
+          appointment.scheduled_time?.slice(
+            0,
+            5
+          );
+
+        if (
+          originalTime !==
+          dropTime
+        ) {
+          onMove(
+            appointment,
+            dropTime
+          );
+        }
+      }
+
+      draggingRef.current =
+        null;
+
+      setDraggingAppointment(
+        null
+      );
+
+      setDragOverTime(
+        null
+      );
+    }
+
+    function handlePointerCancel() {
+      draggingRef.current =
+        null;
+
+      setDraggingAppointment(
+        null
+      );
+
+      setDragOverTime(
+        null
+      );
+    }
+
+    window.addEventListener(
+      "pointermove",
+      handlePointerMove,
+      {
+        passive: false,
+      }
+    );
+
+    window.addEventListener(
+      "pointerup",
+      handlePointerUp
+    );
+
+    window.addEventListener(
+      "pointercancel",
+      handlePointerCancel
+    );
+
+    return () => {
+      window.removeEventListener(
+        "pointermove",
+        handlePointerMove
+      );
+
+      window.removeEventListener(
+        "pointerup",
+        handlePointerUp
+      );
+
+      window.removeEventListener(
+        "pointercancel",
+        handlePointerCancel
+      );
+    };
+  }, [
+    appointments,
+    onMove,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearLongPress();
+    };
+  }, []);
+
+  function startAppointmentDrag(
+    appointment: Appointment,
+    event: React.PointerEvent
+  ) {
+    if (
+      event.pointerType ===
+      "mouse" &&
+      event.button !== 0
+    ) {
+      return;
+    }
+
+    pointerStart.current =
+      {
+        x: event.clientX,
+        y: event.clientY,
+      };
+
+    clearLongPress();
+
+    longPressTimer.current =
+      setTimeout(() => {
+        draggingRef.current =
+          appointment.id;
+
+        setDraggingAppointment(
+          appointment.id
+        );
+
+        if (
+          typeof navigator !==
+            "undefined" &&
+          "vibrate" in navigator
+        ) {
+          navigator.vibrate(
+            25
+          );
+        }
+      }, 400);
+  }
+
+  function handleAppointmentPointerMove(
+    event: React.PointerEvent
+  ) {
+    if (
+      draggingRef.current
+    ) {
+      event.preventDefault();
+      return;
+    }
+
+    if (
+      !pointerStart.current
+    ) {
+      return;
+    }
+
+    const distance =
+      Math.sqrt(
+        Math.pow(
+          event.clientX -
+            pointerStart.current
+              .x,
+          2
+        ) +
+          Math.pow(
+            event.clientY -
+              pointerStart.current
+                .y,
+            2
+          )
+      );
+
+    if (distance > 10) {
+      clearLongPress();
+      pointerStart.current =
+        null;
+    }
+  }
+
+  function handleAppointmentPointerUp() {
+    clearLongPress();
+    pointerStart.current =
+      null;
+  }
 
   const occupiedSlots =
     new Set<number>();
@@ -3124,6 +3512,12 @@ function DaySchedule({
         </div>
       </div>
 
+      {draggingAppointment && (
+        <div className="mb-3 rounded-xl bg-[#b7838e] px-3 py-2 text-center text-[10px] font-medium text-white shadow-sm">
+          Arraste até um horário livre e solte
+        </div>
+      )}
+
       {blocks.length >
         0 && (
         <div className="mb-3 rounded-2xl border border-[#b7838e]/10 bg-white px-3 py-2.5">
@@ -3165,6 +3559,15 @@ function DaySchedule({
                 minute
               );
 
+            const slotTime =
+              minutesToTime(
+                minute
+              );
+
+            const isDropTarget =
+              dragOverTime ===
+              slotTime;
+
             if (
               appointment
             ) {
@@ -3191,6 +3594,10 @@ function DaySchedule({
                   appointment.received_amount
                 );
 
+              const isDragging =
+                draggingAppointment ===
+                appointment.id;
+
               return (
                 <div
                   key={
@@ -3208,7 +3615,30 @@ function DaySchedule({
                     </div>
 
                     <div className="flex-1 p-2">
-                      <div className="rounded-xl border border-[#b7838e]/20 bg-[#f3e5e8] p-3">
+                      <div
+                        onPointerDown={(
+                          event
+                        ) =>
+                          startAppointmentDrag(
+                            appointment,
+                            event
+                          )
+                        }
+                        onPointerMove={
+                          handleAppointmentPointerMove
+                        }
+                        onPointerUp={
+                          handleAppointmentPointerUp
+                        }
+                        onPointerCancel={
+                          handleAppointmentPointerUp
+                        }
+                        className={`select-none touch-none rounded-xl border border-[#b7838e]/20 bg-[#f3e5e8] p-3 transition ${
+                          isDragging
+                            ? "scale-[0.98] opacity-60 shadow-lg"
+                            : "active:scale-[0.99]"
+                        }`}
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-[#211f20]">
@@ -3276,6 +3706,11 @@ function DaySchedule({
                           ) : (
                             <button
                               type="button"
+                              onPointerDown={(
+                                event
+                              ) =>
+                                event.stopPropagation()
+                              }
                               onClick={() =>
                                 onFinalize(
                                   appointment
@@ -3310,6 +3745,11 @@ function DaySchedule({
                         <div className="mt-3 grid grid-cols-3 gap-1.5 border-t border-[#b7838e]/15 pt-2">
                           <button
                             type="button"
+                            onPointerDown={(
+                              event
+                            ) =>
+                              event.stopPropagation()
+                            }
                             onClick={() =>
                               onWhatsApp(
                                 appointment
@@ -3328,6 +3768,11 @@ function DaySchedule({
 
                           <button
                             type="button"
+                            onPointerDown={(
+                              event
+                            ) =>
+                              event.stopPropagation()
+                            }
                             onClick={() =>
                               onEdit(
                                 appointment
@@ -3346,6 +3791,11 @@ function DaySchedule({
 
                           <button
                             type="button"
+                            onPointerDown={(
+                              event
+                            ) =>
+                              event.stopPropagation()
+                            }
                             onClick={() =>
                               onDelete(
                                 appointment
@@ -3377,6 +3827,12 @@ function DaySchedule({
                               )}
                             </p>
                           )}
+
+                        {isDragging && (
+                          <p className="mt-2 text-center text-[9px] font-medium text-[#9d6875]">
+                            Segure e arraste para mover
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3623,31 +4079,45 @@ function DaySchedule({
                 key={
                   minute
                 }
-                className="flex min-h-[54px] border-b border-black/[0.04]"
+                data-agenda-drop-time={
+                  slotTime
+                }
+                className={`flex min-h-[54px] border-b border-black/[0.04] transition ${
+                  isDropTarget
+                    ? "bg-[#f3e5e8] ring-2 ring-inset ring-[#b7838e]/30"
+                    : ""
+                }`}
               >
                 <button
                   type="button"
                   onClick={() =>
                     onSelectTime(
-                      minutesToTime(
-                        minute
-                      )
+                      slotTime
                     )
                   }
                   disabled={
-                    occupied
+                    occupied ||
+                    Boolean(
+                      draggingAppointment
+                    )
                   }
                   className="flex min-w-0 flex-1 text-left transition active:bg-[#f8eef0] disabled:cursor-not-allowed"
                 >
                   <div className="w-[62px] shrink-0 border-r border-black/[0.05] px-2 py-3 text-center text-[10px] font-medium text-[#817b7d]">
-                    {minutesToTime(
-                      minute
-                    )}
+                    {slotTime}
                   </div>
 
                   <div className="flex flex-1 items-center px-3">
-                    <span className="text-[10px] text-[#c1bbbc]">
-                      Horário livre
+                    <span
+                      className={`text-[10px] ${
+                        isDropTarget
+                          ? "font-semibold text-[#9d6875]"
+                          : "text-[#c1bbbc]"
+                      }`}
+                    >
+                      {isDropTarget
+                        ? "Solte aqui"
+                        : "Horário livre"}
                     </span>
                   </div>
                 </button>
@@ -3656,18 +4126,17 @@ function DaySchedule({
                   type="button"
                   onClick={() =>
                     onBlock(
-                      minutesToTime(
-                        minute
-                      )
+                      slotTime
                     )
                   }
                   disabled={
-                    occupied
+                    occupied ||
+                    Boolean(
+                      draggingAppointment
+                    )
                   }
                   className="flex w-[48px] shrink-0 items-center justify-center border-l border-black/[0.04] text-[#aaa5a6] disabled:cursor-not-allowed disabled:opacity-30"
-                  aria-label={`Bloquear às ${minutesToTime(
-                    minute
-                  )}`}
+                  aria-label={`Bloquear às ${slotTime}`}
                 >
                   <CalendarDays
                     className="size-3.5"
